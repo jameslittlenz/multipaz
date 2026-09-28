@@ -78,7 +78,11 @@ service () {
     if [ "openid4vci" = "$instance" ] ; then
       extra="$extra -param system_of_record_url=${BASE_URL}/records"
     fi
-    extra="$extra -param enrollment_server_url=${BASE_URL}/records"
+    # The validatopia profile doesn't run the records server, so its servers self-enroll their
+    # identities; the issuer's under the fixed Validatopia TEST IACA from validatopia-keys.conf.
+    if [ "$PROFILE" != "validatopia" ]; then
+      extra="$extra -param enrollment_server_url=${BASE_URL}/records"
+    fi
   fi
   echo "Starting $service service ($instance) at port $port..."
   java -cp "/app/jars/$service-server.jar:/app/jars/$service.jar:/app/libs/*" "$mainclass" \
@@ -146,7 +150,10 @@ if [ "$PROFILE" = "validatopia" ]; then
     cp -r /app/seed/personas /app/data/personas
   fi
 
+  # Fixed Validatopia TEST PKI (multipaz-server-deployment/validatopia-test-keys/); mount a file
+  # holding your own keys and point VALIDATOPIA_KEYS_CONF at it for anything beyond a demo.
   service openid4vci openid4vci org.multipaz.openid4vci.server.MainValidatopia 8007 \
+    -config "${VALIDATOPIA_KEYS_CONF:-/etc/multipaz/validatopia-keys.conf}" \
     -param admin_bootstrap_user="${ADMIN_BOOTSTRAP_USER:-admin}" \
     -param admin_bootstrap_pass="$ADMIN_BOOTSTRAP_PASS" \
     -param admin_allow_cidr="$ADMIN_ALLOW_CIDR" \

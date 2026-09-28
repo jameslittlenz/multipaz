@@ -34,6 +34,9 @@ COPY multipaz-server-deployment/docker/services/csa.conf /etc/multipaz/csa.conf
 COPY multipaz-server-deployment/docker/services/openid4vci.conf /etc/multipaz/openid4vci.conf
 COPY multipaz-server-deployment/docker/services/records.conf /etc/multipaz/records.conf
 COPY multipaz-server-deployment/docker/services/verifier.conf /etc/multipaz/verifier.conf
+# Fixed Validatopia TEST keys (IACA, test CSCA/DS) for PROFILE=validatopia; see
+# multipaz-server-deployment/validatopia-test-keys/README.md.
+COPY multipaz-server-deployment/validatopia-test-keys/validatopia-keys.conf /etc/multipaz/validatopia-keys.conf
 
 # Copy initial data
 COPY multipaz-server-deployment/docker/init/records.json /app/init/records.json

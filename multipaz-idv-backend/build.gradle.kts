@@ -38,3 +38,18 @@ dependencies {
     testImplementation(libs.ktor.server.netty)
     testImplementation(libs.ktor.server.test.host)
 }
+
+// Regenerates the fixed Validatopia TEST PKI (see multipaz-server-deployment/validatopia-test-keys/README.md).
+// Re-running replaces every key and invalidates all previously issued Photo IDs.
+tasks.register<JavaExec>("generateValidatopiaTestKeys") {
+    group = "validatopia"
+    description = "Generates the fixed Validatopia TEST IACA, test CSCA/DS and reader keys."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.multipaz.idv.backend.keys.ValidatopiaTestKeysGenerator")
+    args(
+        rootProject.file("multipaz-server-deployment/validatopia-test-keys").absolutePath,
+        rootProject.file(
+            "samples/validatopia/shared/src/commonMain/kotlin/org/multipaz/samples/validatopia/shared/trust/ValidatopiaTestPki.kt"
+        ).absolutePath,
+    )
+}

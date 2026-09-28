@@ -4,6 +4,9 @@
     "*.multipaz.org/**",
     "sorotokin.com/**"
   ],
+  "credential_photo_id": {
+    "title": "{core.given_name} {core.family_name}"
+  },
   "credential_mdl": {
     "title": "{core.given_name}'s driver license",
     "card_art": {
