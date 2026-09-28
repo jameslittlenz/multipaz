@@ -199,3 +199,49 @@ and must be removed at very least in the container environment.
 | `MODE` | `proxy`                 | `proxy` for nginx routing, `direct` for port-only access to individual services |
 | `ADMIN_PASS` | `multipaz`        | default is only used for localhost deployment, otherwise it must be specified
 
+## Validatopia Profile
+
+`PROFILE=validatopia` runs only the OpenID4VCI (issuer + admin site) and Backend
+(device-attestation) services behind a hardened nginx config, instead of the full bundle above
+(see `docs/validatopia/PLAN.md`). Admin accounts use Argon2id-hashed passwords and mandatory TOTP,
+not `ADMIN_PASS`.
+
+```bash
+podman run -d --rm \
+    -p 127.0.0.1:8000:8000 \
+    -e PROFILE=validatopia \
+    -e BASE_URL=https://validatopia.your-domain.com \
+    -e ADMIN_BOOTSTRAP_USER=admin \
+    -e ADMIN_BOOTSTRAP_PASS=<a strong password> \
+    -v /your/data/folder:/app/data:z \
+    -v /your/logs/folder:/app/logs:z \
+    multipaz/server-bundle:latest
+```
+
+The first admin account is bootstrapped from `ADMIN_BOOTSTRAP_USER`/`ADMIN_BOOTSTRAP_PASS` and
+must complete TOTP enrollment on its first login (see the admin site's login page). The container
+**refuses to start** if `ADMIN_BOOTSTRAP_PASS` is empty and `BASE_URL` isn't a loopback address.
+
+### Environment variables specific to this profile
+
+| Variable | Default | Description |
+|----------|---------|--------------|
+| `ADMIN_BOOTSTRAP_USER` | `admin` | Username for the first admin account, created on first boot if no accounts exist yet. |
+| `ADMIN_BOOTSTRAP_PASS` | *(none)* | Password for that account. Required unless `BASE_URL` is a loopback address. |
+| `ADMIN_ALLOW_CIDR` | *(none, unrestricted)* | Comma-separated IPv4/IPv6 CIDR blocks allowed to reach `/admin_*` endpoints. |
+| `IDV_DEMO_MODE` | `false` | Passed through to the server as `idv_demo_mode`; informational for now (the admin-editable settings, e.g. "accept untrusted CSCA", are the actual runtime controls — see the Settings admin page). |
+| `TLS_CERT` / `TLS_KEY` | *(none)* | Paths (inside the container, so mount them via `-v`) to a certificate/key pair for nginx to terminate TLS on port 8443 directly. **Not needed, and not the expected setup, if you front this container with your own reverse proxy** (e.g. Caddy, nginx, an ALB) that already terminates TLS — which is the normal case for `BASE_URL` being `https://...` while the container itself only speaks plain HTTP on port 8000. In that setup, bind the container's port to `127.0.0.1` (as in the example above) and point your reverse proxy at it. nginx trusts `X-Forwarded-For`/`X-Forwarded-Proto` from private-network peers only (see `nginx-validatopia-locations.conf`), so rate limiting and `ADMIN_ALLOW_CIDR` see the real client address rather than your reverse proxy's. |
+
+### Placeholder personas
+
+The image ships two placeholder test personas (fake identities, not real people) so the container
+is demoable immediately; an admin's own `personas.json` upload (via the Personas admin page)
+always takes precedence and is never overwritten by this.
+
+### Container smoke test
+
+```bash
+./gradlew :multipaz-server-deployment:buildDockerImage
+./multipaz-server-deployment/validatopia-smoke.sh
+```
+

@@ -22,8 +22,11 @@ COPY multipaz-server-deployment/build/docker-staging/jars/ /app/jars/
 COPY multipaz-server-frontend/build/dist/js/productionExecutable /app/web
 RUN chmod -R 755 /app/web
 
-# Copy nginx configuration
+# Copy nginx configuration. nginx-validatopia.conf is only swapped into place at container start
+# (start-servers.sh) when PROFILE=validatopia; nginx.conf remains the default profile's config.
 COPY multipaz-server-deployment/docker/nginx.conf /etc/nginx/nginx.conf
+COPY multipaz-server-deployment/docker/nginx-validatopia.conf /etc/nginx/nginx-validatopia.conf
+COPY multipaz-server-deployment/docker/nginx-validatopia-locations.conf /etc/nginx/conf.d/validatopia-locations.conf
 
 # Copy Multipaz services configurations
 COPY multipaz-server-deployment/docker/services/backend.conf /etc/multipaz/backend.conf
@@ -35,12 +38,17 @@ COPY multipaz-server-deployment/docker/services/verifier.conf /etc/multipaz/veri
 # Copy initial data
 COPY multipaz-server-deployment/docker/init/records.json /app/init/records.json
 
+# Placeholder personas for the Validatopia profile (docs/validatopia/PLAN.md's Component G);
+# start-servers.sh seeds /app/data/personas from this on first boot only, never overwriting an
+# admin's own upload.
+COPY multipaz-server-deployment/docker/init/personas/ /app/seed/personas/
+
 # Copy startup script
 COPY multipaz-server-deployment/docker/start-servers.sh /app/start-servers.sh
 RUN chmod +x /app/start-servers.sh
 
 # Create directories for data and logs
-RUN mkdir -p /app/data /app/logs && chown -R multipaz:multipaz /app
+RUN mkdir -p /app/data /app/logs /etc/nginx/conf.d && chown -R multipaz:multipaz /app
 
 # nginx needs to write to these directories
 RUN mkdir -p /var/lib/nginx/body /var/log/nginx /run /run/nginx && \
@@ -48,7 +56,8 @@ RUN mkdir -p /var/lib/nginx/body /var/log/nginx /run /run/nginx && \
 
 USER multipaz
 
-# Expose unified port (nginx) and individual service ports
-EXPOSE 8080 8004 8005 8006 8007 8008 8009 8010
+# Expose unified port (nginx; 8443 when TLS_CERT/TLS_KEY are mounted for the validatopia
+# profile) and individual service ports (used directly in MODE=direct).
+EXPOSE 8000 8443 8004 8005 8006 8007 8008
 
 ENTRYPOINT ["/app/start-servers.sh"]

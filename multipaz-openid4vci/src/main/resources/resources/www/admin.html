@@ -1,21 +1,129 @@
 <html lang="en-US">
 <head>
-    <title>OpenId4VCI Sample Server Administration</title>
+    <title>Validatopia Admin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="style.css" />
 </head>
 <body class="wide">
 <div id="main">
     <div id="login"></div>
-    <h1>OpenId4VCI Sample Server Administration</h1>
+    <h1>Validatopia Admin</h1>
     <h3 class="logged_out">You need to log in to be able to use this page.</h3>
     <div class="logged_in">
-        <h3>Sessions</h3>
-        <table id="sessions">
-        </table>
+        <nav class="admin_tabs" role="tablist" aria-label="Admin sections">
+            <button role="tab" aria-controls="panel-dashboard" aria-selected="true" data-panel="panel-dashboard">Dashboard</button>
+            <button role="tab" aria-controls="panel-sessions" aria-selected="false" data-panel="panel-sessions">Issued credentials</button>
+            <button role="tab" aria-controls="panel-settings" aria-selected="false" data-panel="panel-settings">Settings</button>
+            <button role="tab" aria-controls="panel-trust" aria-selected="false" data-panel="panel-trust">Trust</button>
+            <button role="tab" aria-controls="panel-personas" aria-selected="false" data-panel="panel-personas">Personas</button>
+            <button role="tab" aria-controls="panel-audit" aria-selected="false" data-panel="panel-audit">Audit log</button>
+            <button role="tab" aria-controls="panel-accounts" aria-selected="false" data-panel="panel-accounts">Admin accounts</button>
+        </nav>
+
+        <section id="panel-dashboard" class="admin_panel" role="tabpanel">
+            <h3>Dashboard</h3>
+            <div id="dashboardSummary"></div>
+        </section>
+
+        <section id="panel-sessions" class="admin_panel" role="tabpanel" hidden>
+            <h3>Issued credentials</h3>
+            <table id="sessions"></table>
+        </section>
+
+        <section id="panel-settings" class="admin_panel" role="tabpanel" hidden>
+            <h3>Identity-verification settings</h3>
+            <form id="settingsForm"></form>
+            <p><span id="settingsStatus" role="status"></span></p>
+        </section>
+
+        <section id="panel-trust" class="admin_panel" role="tabpanel" hidden>
+            <h3>Trusted CSCA certificates</h3>
+            <p>
+                <a id="downloadTestCsca" href="#">Download the Validatopia Test CSCA (PEM)</a>
+            </p>
+            <table id="trustTable">
+                <thead>
+                    <tr><th>Subject</th><th>Valid from</th><th>Valid until</th><th>Fingerprint (SHA-256)</th><th></th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <h4>Upload a CSCA certificate</h4>
+            <p class="field_hint">Paste one or more PEM-encoded certificates (concatenated PEM
+                blocks are fine). Uploading an ICAO Master List isn't supported yet.</p>
+            <textarea id="trustPemInput" rows="8" cols="70" aria-label="PEM certificate(s) to upload"></textarea>
+            <div><button id="trustUploadButton">Upload</button></div>
+            <p><span id="trustStatus" role="status"></span></p>
+        </section>
+
+        <section id="panel-personas" class="admin_panel" role="tabpanel" hidden>
+            <h3>Dummy test personas</h3>
+            <div id="personaList"></div>
+            <h4>Replace personas.json and portraits</h4>
+            <p class="field_hint">Paste the full <code>personas.json</code> text, then attach the
+                portrait JPEGs it references by filename. Replacing personas takes effect
+                immediately for new persona-based issuances.</p>
+            <div>
+                <label for="personasJsonInput">personas.json:</label>
+                <textarea id="personasJsonInput" rows="10" cols="70" aria-label="personas.json contents"></textarea>
+            </div>
+            <div>
+                <label for="personaPortraitsInput">Portrait files:</label>
+                <input id="personaPortraitsInput" type="file" accept="image/jpeg" multiple />
+            </div>
+            <div><button id="personasUploadButton">Upload</button></div>
+            <p><span id="personasStatus" role="status"></span></p>
+        </section>
+
+        <section id="panel-audit" class="admin_panel" role="tabpanel" hidden>
+            <h3>Identity-verification audit</h3>
+            <p><a id="idvAuditCsvLink" href="#">Export as CSV</a></p>
+            <table id="idvAuditTable">
+                <thead>
+                    <tr><th>Time</th><th>Method</th><th>Accepted</th><th>Nationality</th><th>Document</th><th>Face score</th><th>Flags</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <h3>Admin action log</h3>
+            <p><a id="actionLogCsvLink" href="#">Export as CSV</a></p>
+            <table id="actionLogTable">
+                <thead>
+                    <tr><th>Time</th><th>Admin</th><th>Action</th><th>Detail</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <section id="panel-accounts" class="admin_panel" role="tabpanel" hidden>
+            <h3>Admin accounts</h3>
+            <table id="accountsTable">
+                <thead>
+                    <tr><th>Username</th><th>Created</th><th>TOTP enrolled</th><th>Locked</th><th></th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <h4>Add an admin account</h4>
+            <div>
+                <label for="newAccountUsername">Username:</label>
+                <input id="newAccountUsername" type="text" autocomplete="off" />
+            </div>
+            <div>
+                <label for="newAccountPassword">Initial password:</label>
+                <input id="newAccountPassword" type="password" autocomplete="new-password" />
+                <span class="field_hint">At least 12 characters. The new admin sets up TOTP on their first login.</span>
+            </div>
+            <div><button id="addAccountButton">Add account</button></div>
+            <p><span id="accountsStatus" role="status"></span></p>
+        </section>
     </div>
 </div>
 </body>
 <script src="login.js"></script>
+<script src="tabs.js"></script>
 <script src="list_sessions.js"></script>
+<script src="dashboard.js"></script>
+<script src="settings.js"></script>
+<script src="trust.js"></script>
+<script src="personas.js"></script>
+<script src="audit.js"></script>
+<script src="accounts.js"></script>
 </html>

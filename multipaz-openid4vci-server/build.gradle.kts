@@ -7,7 +7,9 @@ plugins {
 }
 
 application {
-    mainClass.set("org.multipaz.openid4vci.server.Main")
+    // Overridable for local dev, e.g. to run the Validatopia profile:
+    // ./gradlew :multipaz-openid4vci-server:run -PmainClass=org.multipaz.openid4vci.server.MainValidatopia --args="..."
+    mainClass.set(providers.gradleProperty("mainClass").getOrElse("org.multipaz.openid4vci.server.Main"))
 }
 
 kotlin {

@@ -1,5 +1,6 @@
 package org.multipaz.openid4vci.server
 
+import org.multipaz.openid4vci.admin.AdminAuth
 import org.multipaz.openid4vci.credential.CredentialFactoryAgeVerification
 import org.multipaz.openid4vci.credential.CredentialFactoryDigitalPaymentCredential
 import org.multipaz.openid4vci.credential.CredentialFactoryDigitalPaymentCredentialSdJwt
@@ -10,6 +11,8 @@ import org.multipaz.openid4vci.credential.CredentialFactorySdjwtPid
 import org.multipaz.openid4vci.credential.CredentialFactoryUtopiaLoyalty
 import org.multipaz.openid4vci.credential.CredentialFactoryUtopiaMovieTicket
 import org.multipaz.openid4vci.credential.CredentialFactoryUtopiaNaturalization
+import org.multipaz.rpc.backend.BackendEnvironment
+import org.multipaz.rpc.backend.Configuration
 import org.multipaz.server.common.ServerConfiguration
 import org.multipaz.server.common.runServer
 
@@ -34,9 +37,13 @@ class Main {
         fun main(args: Array<String>) {
             runServer(
                 args = args,
-                needAdminPassword = true,
+                // Superseded by AdminAuth's Argon2id/TOTP account system (Component E); the old
+                // single shared 'admin_password' is no longer read anywhere in this module.
+                needAdminPassword = false,
                 checkConfiguration = ::checkConfiguration,
                 environmentInitializer = {
+                    AdminAuth.ensureBootstrapped(BackendEnvironment.getInterface(Configuration::class)!!)
+
                     val credentialFactoryRegistry = CredentialFactoryRegistry(
                         listOf(
                             CredentialFactoryMdl(),

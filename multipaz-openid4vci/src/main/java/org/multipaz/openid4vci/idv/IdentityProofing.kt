@@ -37,7 +37,43 @@ interface IdentityProofing {
 
     /** Lists issuance audit entries in insertion order, most recently inserted last. */
     suspend fun listAudit(afterId: String?, limit: Int): List<IdvAuditEntry>
+
+    /** The trusted CSCA certificates: the Validatopia Test CSCA plus any admin-uploaded ones. */
+    suspend fun listTrustedCsca(): List<TrustedCscaInfo>
+
+    /**
+     * Parses and adds one or more concatenated PEM-encoded CSCA certificates to the trust store
+     * used by [proof]'s passive authentication, and returns the full updated list.
+     *
+     * @throws org.multipaz.rpc.handler.InvalidRequestException if [pem] contains no valid certificate.
+     */
+    suspend fun uploadTrustedCsca(pem: String): List<TrustedCscaInfo>
+
+    /** Removes an admin-uploaded CSCA certificate by [fingerprintSha256Hex]. The Test CSCA can't be removed this way. */
+    suspend fun deleteTrustedCsca(fingerprintSha256Hex: String)
+
+    /** The Validatopia Test CSCA certificate, PEM-encoded, for the admin site's "download" action. */
+    suspend fun testCscaPem(): String
+
+    /**
+     * Replaces the persona store from an uploaded `personas.json` plus its referenced portrait
+     * JPEGs (keyed by filename, as referenced by each persona's `portrait` field).
+     *
+     * @throws org.multipaz.rpc.handler.InvalidRequestException if validation fails (see
+     *   `PersonaStore.fromJson`) or a referenced portrait is missing from [portraits].
+     */
+    suspend fun uploadPersonas(personasJson: String, portraits: Map<String, ByteArray>): List<PersonaSummary>
 }
+
+/** One trusted CSCA certificate, as shown on the admin site's "Trust" page. */
+data class TrustedCscaInfo(
+    val fingerprintSha256Hex: String,
+    val subject: String,
+    val notBeforeEpochSeconds: Long,
+    val notAfterEpochSeconds: Long,
+    /** `true` for the built-in Validatopia Test CSCA, which can't be deleted via [IdentityProofing.deleteTrustedCsca]. */
+    val builtIn: Boolean,
+)
 
 /** A dummy persona available for issuance via `/idv/persona`. */
 data class PersonaSummary(

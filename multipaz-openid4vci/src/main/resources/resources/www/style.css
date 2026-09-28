@@ -99,3 +99,83 @@ span.label {
 button {
     margin-left: 1em;
 }
+
+.revealed_portrait {
+    display: block;
+    max-width: 200px;
+    max-height: 200px;
+    margin: 1em;
+    border: 1px solid black;
+}
+
+.login_status {
+    margin-left: 0.5em;
+    color: #a00;
+}
+
+.totp_enrollment {
+    margin-top: 0.5em;
+}
+
+.totp_enrollment code {
+    font-size: 1.1em;
+    letter-spacing: 0.05em;
+    background: #eee;
+    padding: 2px 6px;
+}
+
+/* Validatopia admin site tabs (admin.html) */
+nav.admin_tabs {
+    margin: 1em 0;
+    border-bottom: 2px solid #333;
+}
+
+nav.admin_tabs button {
+    margin-left: 0;
+    margin-right: 0.25em;
+    padding: 0.5em 1em;
+    border: 1px solid #333;
+    border-bottom: none;
+    background: #eee;
+    cursor: pointer;
+}
+
+nav.admin_tabs button[aria-selected="true"] {
+    background: #333;
+    color: white;
+}
+
+.admin_panel {
+    padding: 1em 0;
+}
+
+.admin_panel[hidden] {
+    display: none;
+}
+
+.admin_panel h3 {
+    margin-top: 0;
+}
+
+.admin_panel form > div {
+    margin-bottom: 0.75em;
+}
+
+.admin_panel label {
+    display: inline-block;
+    min-width: 14em;
+}
+
+.field_hint {
+    display: block;
+    margin-left: 14em;
+    color: #555;
+    font-size: 0.9em;
+}
+
+.persona_portrait {
+    max-width: 80px;
+    max-height: 80px;
+    vertical-align: middle;
+    margin-right: 0.5em;
+}

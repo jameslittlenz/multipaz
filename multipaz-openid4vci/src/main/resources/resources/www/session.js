@@ -22,6 +22,45 @@ async function refreshSession() {
         addField(container, "Authorized", formatter.format(new Date(data.authorized)));
     }
     addField(container, "Expiration", formatter.format(new Date(data.expiration)));
+
+    const retainedRow = document.createElement("div");
+    const revealButton = document.createElement("button");
+    revealButton.textContent = "Reveal portrait";
+    revealButton.title = "Every reveal is recorded in the audit log.";
+    revealButton.addEventListener("click", async function() {
+        const response = await window.adminFetch(
+            "admin_reveal_portrait?session_id=" + encodeURIComponent(sessionId), { method: "POST" });
+        if (!response.ok) {
+            portraitImg.style.display = "none";
+            alert(response.status === 404
+                ? "No retained portrait for this session."
+                : "Could not reveal portrait.");
+            return;
+        }
+        portraitImg.src = URL.createObjectURL(await response.blob());
+        portraitImg.style.display = "block";
+    });
+    retainedRow.appendChild(revealButton);
+    const deleteButton = document.createElement("button");
+    deleteButton.textContent = "Delete retained passport data";
+    deleteButton.addEventListener("click", async function() {
+        if (!confirm("Delete this session's retained passport data? Already-issued credentials " +
+            "stay valid, but this session can no longer be used to refresh them.")) {
+            return;
+        }
+        await window.adminFetch(
+            "admin_delete_retained_data?session_id=" + encodeURIComponent(sessionId), { method: "POST" });
+        portraitImg.style.display = "none";
+        alert("Retained data deleted.");
+    });
+    retainedRow.appendChild(deleteButton);
+    container.appendChild(retainedRow);
+    const portraitImg = document.createElement("img");
+    portraitImg.alt = "Retained portrait";
+    portraitImg.className = "revealed_portrait";
+    portraitImg.style.display = "none";
+    container.appendChild(portraitImg);
+
     for (credential of data.credentials) {
         let cred = document.createElement("div");
         cred.className = "cred";
@@ -63,7 +102,7 @@ async function refreshSession() {
 
 function setStatusHandler(base, credential, status) {
     return async function() {
-        let result = await(await fetch(base + "admin_set_credential_status", {
+        let result = await(await window.adminFetch("admin_set_credential_status", {
             method: 'POST',
             headers: {
                'Content-Type': 'application/json',

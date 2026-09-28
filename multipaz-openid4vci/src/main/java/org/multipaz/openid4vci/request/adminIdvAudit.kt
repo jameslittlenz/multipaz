@@ -10,15 +10,33 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
 /**
- * `GET /admin_idv_audit?after=...&limit=...`: lists issuance audit entries.
- *
- * CSV export and the admin website page that will display this are Component F, deferred to M3.
+ * `GET /admin_idv_audit?after=...&limit=...&format=csv`: lists issuance audit entries, as JSON by
+ * default or CSV when `format=csv` (for the admin site's "Audit log" export button).
  */
 suspend fun adminIdvAudit(call: ApplicationCall) {
     val identityProofing = identityProofingOrNotFound(call) ?: return
     val afterId = call.request.queryParameters["after"]
     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100
     val entries = identityProofing.listAudit(afterId, limit)
+    if (call.request.queryParameters["format"] == "csv") {
+        val csv = buildString {
+            append("id,timestamp,method,accepted,nationality,masked_document_number,face_score,session_id,flags\n")
+            for (entry in entries) {
+                append(csvField(entry.id)); append(',')
+                append(entry.timestampEpochSeconds); append(',')
+                append(csvField(entry.method)); append(',')
+                append(entry.accepted); append(',')
+                append(csvField(entry.nationality ?: "")); append(',')
+                append(csvField(entry.maskedDocumentNumber ?: "")); append(',')
+                append(entry.faceScore?.toString() ?: ""); append(',')
+                append(csvField(entry.sessionId ?: "")); append(',')
+                append(csvField(entry.flags.joinToString(";")))
+                append('\n')
+            }
+        }
+        call.respondText(text = csv, contentType = ContentType("text", "csv"))
+        return
+    }
     call.respondText(
         text = buildJsonArray {
             for (entry in entries) {
@@ -38,3 +56,5 @@ suspend fun adminIdvAudit(call: ApplicationCall) {
         contentType = ContentType.Application.Json
     )
 }
+
+private fun csvField(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""

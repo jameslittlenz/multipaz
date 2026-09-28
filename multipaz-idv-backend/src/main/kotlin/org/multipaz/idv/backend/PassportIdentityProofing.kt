@@ -15,11 +15,13 @@ import org.multipaz.idv.backend.audit.AdminAuditRecord
 import org.multipaz.idv.backend.audit.IssuanceAuditRecord
 import org.multipaz.idv.backend.audit.IssuanceMethod
 import org.multipaz.idv.backend.audit.toEntry
+import org.multipaz.idv.backend.csca.UploadedCscaStore
 import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
 import org.multipaz.idv.backend.face.FaceMatcher
 import org.multipaz.idv.backend.image.Jp2Decoder
 import org.multipaz.idv.backend.image.Jp2DecoderException
 import org.multipaz.idv.backend.persona.PersonaStore
+import org.multipaz.idv.backend.persona.PersonaStorePersistence
 import org.multipaz.idv.backend.settings.IdvSettingsRecord
 import org.multipaz.idv.backend.settings.toData
 import org.multipaz.idv.backend.settings.toRecord
@@ -29,6 +31,7 @@ import org.multipaz.idv.mrz.Mrz
 import org.multipaz.idv.mrz.MrzException
 import org.multipaz.idv.mrz.MrzSex
 import org.multipaz.idv.mrz.MrzTd3
+import org.multipaz.idv.pa.CscaStore
 import org.multipaz.idv.pa.PassiveAuthenticationFlag
 import org.multipaz.idv.pa.PassiveAuthenticator
 import org.multipaz.idv.synthetic.SyntheticPassportFactory
@@ -38,6 +41,7 @@ import org.multipaz.openid4vci.idv.IdvResult
 import org.multipaz.openid4vci.idv.IdvSettingsData
 import org.multipaz.openid4vci.idv.PassportEvidence
 import org.multipaz.openid4vci.idv.PersonaSummary
+import org.multipaz.openid4vci.idv.TrustedCscaInfo
 import org.multipaz.rpc.handler.InvalidRequestException
 import org.multipaz.util.toBase64Url
 import kotlin.time.Clock
@@ -63,7 +67,7 @@ class PassportIdentityProofing(
         val paResult = PassiveAuthenticator.authenticate(
             sod = sod,
             dataGroups = mapOf(1 to dg1, 2 to dg2),
-            cscaStore = testCsca.cscaStore,
+            cscaStore = combinedCscaStore(),
         )
         val flags = mutableListOf<String>()
         flags.addAll(paResult.flags.map { it.name })
@@ -152,7 +156,7 @@ class PassportIdentityProofing(
         if (!dummyIssuanceEnabled()) {
             return emptyList()
         }
-        return personaStore.list().map { PersonaSummary(it.id, it.givenName, it.familyName) }
+        return activePersonaStore().list().map { PersonaSummary(it.id, it.givenName, it.familyName) }
     }
 
     override suspend fun proofPersona(personaId: String): IdvResult {
@@ -160,28 +164,34 @@ class PassportIdentityProofing(
         if (!settings.dummyIssuanceEnabled) {
             throw InvalidRequestException("Dummy issuance is disabled")
         }
-        val persona = personaStore.find(personaId)
+        val store = activePersonaStore()
+        val persona = store.find(personaId)
             ?: throw InvalidRequestException("Unknown persona '$personaId'")
 
         val passport = SyntheticPassportFactory.createPassport(
             documentSignerCertificate = testCsca.documentSignerCertificate,
             documentSignerPrivateKey = testCsca.documentSignerPrivateKey,
             documentSignerSignatureAlgorithm = testCsca.signatureAlgorithm,
-            issuingState = IcaoCountryCodes.VALIDATOPIA_ALPHA_3,
+            // The passport's own issuing state/nationality come from the persona (e.g. a persona
+            // can represent an NZL passport holder); this is independent of who issues the Photo
+            // ID itself, which stays Validatopia regardless (see issuingAuthority below and
+            // CredentialFactoryPhotoId's fixed issuing_country). The Document Signer is always
+            // the Validatopia Test CSCA — there's no real NZL/AUS CSCA in this synthetic sandbox.
+            issuingState = persona.nationality,
             primaryIdentifier = persona.familyName,
             secondaryIdentifier = persona.givenName,
             documentNumber = persona.documentNumber,
-            nationality = IcaoCountryCodes.VALIDATOPIA_ALPHA_3,
+            nationality = persona.nationality,
             birthDate = persona.birthDate,
             sex = isoSexToMrzSex(persona.sex),
             expiryDate = persona.expiryDate,
-            portraitBytes = personaStore.portraitFor(persona),
+            portraitBytes = store.portraitFor(persona),
         )
 
         val today = todayUtc()
         val systemOfRecordData = buildSystemOfRecordData(
             mrz = passport.mrz,
-            portraitJpeg = Jp2Decoder.toJpeg(personaStore.portraitFor(persona)),
+            portraitJpeg = Jp2Decoder.toJpeg(store.portraitFor(persona)),
             sod = passport.sod,
             dg1 = passport.dg1,
             dg2 = passport.dg2,
@@ -193,7 +203,7 @@ class PassportIdentityProofing(
         recordAudit(
             method = IssuanceMethod.PERSONA,
             accepted = true,
-            nationality = IcaoCountryCodes.VALIDATOPIA_ALPHA_2,
+            nationality = IcaoCountryCodes.toAlpha2(persona.nationality),
             documentNumber = persona.documentNumber,
             faceScore = null,
             flags = emptyList(),
@@ -213,6 +223,40 @@ class PassportIdentityProofing(
 
     override suspend fun listAudit(afterId: String?, limit: Int): List<IdvAuditEntry> =
         IssuanceAuditRecord.list(afterId, limit).map { (id, record) -> record.toEntry(id) }
+
+    override suspend fun listTrustedCsca(): List<TrustedCscaInfo> =
+        listOf(UploadedCscaStore.toInfo(testCsca.cscaCertificate, builtIn = true)) +
+            UploadedCscaStore.list().map { UploadedCscaStore.toInfo(it, builtIn = false) }
+
+    override suspend fun uploadTrustedCsca(pem: String): List<TrustedCscaInfo> {
+        UploadedCscaStore.add(pem)
+        return listTrustedCsca()
+    }
+
+    override suspend fun deleteTrustedCsca(fingerprintSha256Hex: String) {
+        if (fingerprintSha256Hex.equals(UploadedCscaStore.fingerprint(testCsca.cscaCertificate), ignoreCase = true)) {
+            throw InvalidRequestException("The built-in Validatopia Test CSCA can't be deleted")
+        }
+        UploadedCscaStore.delete(fingerprintSha256Hex)
+    }
+
+    override suspend fun testCscaPem(): String = testCsca.cscaCertificate.toPem()
+
+    override suspend fun uploadPersonas(personasJson: String, portraits: Map<String, ByteArray>): List<PersonaSummary> {
+        val store = PersonaStorePersistence.save(personasJson, portraits)
+        return store.list().map { PersonaSummary(it.id, it.givenName, it.familyName) }
+    }
+
+    private suspend fun combinedCscaStore(): CscaStore {
+        val uploaded = UploadedCscaStore.list()
+        return if (uploaded.isEmpty()) {
+            testCsca.cscaStore
+        } else {
+            CscaStore.from(listOf(testCsca.cscaCertificate) + uploaded)
+        }
+    }
+
+    private suspend fun activePersonaStore(): PersonaStore = PersonaStorePersistence.load() ?: personaStore
 
     private suspend fun reject(
         flags: List<String>,

@@ -12,24 +12,48 @@ no_protocol="${BASE_URL#*://}"      # strip protocol
 host_port="${no_protocol%%/*}"     # strip path
 host="${host_port%:*}"  # strip port
 
+is_loopback_host() {
+  [ "$1" = "localhost" ] || [ "$1" = "127.0.0.1" ] || [ "$1" = "::1" ] || [ -z "$1" ]
+}
+
 # Mode: "proxy" (default) routes through nginx; "direct" exposes ports directly
 MODE="${MODE:-proxy}"
+
+# Profile: "full" (default) starts every reference server; "validatopia" starts only the
+# openid4vci (issuer/admin site) and backend (device-attestation) services behind a hardened
+# nginx config (docs/validatopia/PLAN.md's Component G).
+PROFILE="${PROFILE:-full}"
 
 # Additional params that can be passed to all servers
 EXTRA_PARAMS="${EXTRA_PARAMS:-}"
 
-if [ -z "$ADMIN_PASS" ] ; then
-  if [ "$BASE_URL" = "http://localhost:8000" ] ; then
-    ADMIN_PASS=multipaz
-    echo "Admin password is set to 'multipaz'"
-  else
-    echo "ADMIN_PASS must be set for non-test deployments"
+if [ "$PROFILE" = "validatopia" ]; then
+  # Refuses to launch the JVM at all with an empty bootstrap password on a non-loopback
+  # base_url (docs/validatopia/PLAN.md's Component E). AdminAuth.ensureBootstrapped() repeats
+  # this check inside the JVM as defense in depth, in case something starts the JVM some other
+  # way, but this is the primary, fail-fast gate.
+  if [ -z "$ADMIN_BOOTSTRAP_PASS" ] && ! is_loopback_host "$host"; then
+    echo "ERROR: ADMIN_BOOTSTRAP_PASS must be set when BASE_URL ('$BASE_URL') is not a loopback" \
+         "address. Refusing to start."
+    exit 1
+  fi
+else
+  if [ -z "$ADMIN_PASS" ] ; then
+    if is_loopback_host "$host" ; then
+      ADMIN_PASS=multipaz
+      echo "Admin password is set to 'multipaz'"
+    else
+      echo "ERROR: ADMIN_PASS must be set when BASE_URL ('$BASE_URL') is not a loopback address." \
+           "Refusing to start."
+      exit 1
+    fi
   fi
 fi
 
 echo "=========================================="
 echo "Multipaz Server Bundle"
 echo "=========================================="
+echo "Profile: ${PROFILE}"
 echo "Mode: ${MODE}"
 echo "Base URL: ${BASE_URL}"
 echo "=========================================="
@@ -71,8 +95,41 @@ service () {
   echo "  PID: $!"
 }
 
+setup_tls() {
+  # Populates the include target nginx-validatopia.conf ends its http{} block with. Left as an
+  # empty file (no TLS server block) unless both TLS_CERT and TLS_KEY point to readable files.
+  tls_conf=/etc/nginx/conf.d/validatopia-tls-server.conf
+  mkdir -p /etc/nginx/conf.d
+  : > "$tls_conf"
+  if [ -n "$TLS_CERT" ] && [ -n "$TLS_KEY" ]; then
+    if [ -r "$TLS_CERT" ] && [ -r "$TLS_KEY" ]; then
+      cat > "$tls_conf" <<EOF
+server {
+    listen 8443 ssl;
+    server_name _;
+
+    ssl_certificate     $TLS_CERT;
+    ssl_certificate_key $TLS_KEY;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    include /etc/nginx/conf.d/validatopia-locations.conf;
+}
+EOF
+      echo "TLS enabled on port 8443 (TLS_CERT=$TLS_CERT)"
+    else
+      echo "WARNING: TLS_CERT/TLS_KEY set but not both readable; serving HTTP only"
+    fi
+  fi
+}
+
 # Start nginx if in proxy mode, must be first, as services will want to connect to each other
 if [ "$MODE" = "proxy" ]; then
+    if [ "$PROFILE" = "validatopia" ]; then
+        setup_tls
+        cp /etc/nginx/nginx-validatopia.conf /etc/nginx/nginx.conf
+    fi
     echo "Starting nginx reverse proxy on port 8000..."
     nginx -g 'daemon off;' &
     NGINX_PID=$!
@@ -80,33 +137,52 @@ if [ "$MODE" = "proxy" ]; then
     pids="$pids ${NGINX_PID}"
 fi
 
-# Check if DB exists before launching services (DB may be mounted from outside)
-if [ -r /app/data/records.db ]
-then
-   INIT=0
-else
-   INIT=1
-fi
+if [ "$PROFILE" = "validatopia" ]; then
+  # Personas: an admin-uploaded personas.json (persisted in the database) always wins. On first
+  # boot, if /app/data/personas doesn't exist yet, seed it from the placeholder personas baked
+  # into the image, so the container starts demoable without requiring an upload first
+  # (docs/validatopia/PLAN.md's Component G: "the image contains ... placeholder personas").
+  if [ ! -d /app/data/personas ] && [ -d /app/seed/personas ]; then
+    cp -r /app/seed/personas /app/data/personas
+  fi
 
-# records server must be started first, as it processes enrollments
-service records records org.multipaz.records.server.Main 8004 -param admin_password=$ADMIN_PASS
-service openid4vci openid4vci org.multipaz.openid4vci.server.Main 8007 -param admin_password=$ADMIN_PASS
-service csa csa org.multipaz.csa.server.Main 8005
-service verifier verifier org.multipaz.verifier.server.Main 8006
-service backend backend org.multipaz.backend.server.Main 8008
-
-if [ "$INIT" = "0" ]
-then
-echo "System of Records database exists, not loading initial data"
+  service openid4vci openid4vci org.multipaz.openid4vci.server.MainValidatopia 8007 \
+    -param admin_bootstrap_user="${ADMIN_BOOTSTRAP_USER:-admin}" \
+    -param admin_bootstrap_pass="$ADMIN_BOOTSTRAP_PASS" \
+    -param admin_allow_cidr="$ADMIN_ALLOW_CIDR" \
+    -param idv_demo_mode="${IDV_DEMO_MODE:-false}" \
+    -param personas_seed_dir=/app/data/personas \
+    -param preauthorized_offer_secret="$(head -c 24 /dev/urandom | base64)"
+  service backend backend org.multipaz.backend.server.Main 8008
 else
-echo "Loading initial data into the System of Records..."
-(
-  echo '{'
-  echo '"password": "'$ADMIN_PASS'",'
-  echo '"identities":'
-  cat /app/init/records.json
-  echo '}'
-) | curl --retry-connrefused --retry 5 -H "Content-Type: application/json" -d @- http://localhost:8004/identity/load
+  # Check if DB exists before launching services (DB may be mounted from outside)
+  if [ -r /app/data/records.db ]
+  then
+     INIT=0
+  else
+     INIT=1
+  fi
+
+  # records server must be started first, as it processes enrollments
+  service records records org.multipaz.records.server.Main 8004 -param admin_password=$ADMIN_PASS
+  service openid4vci openid4vci org.multipaz.openid4vci.server.Main 8007 -param admin_password=$ADMIN_PASS
+  service csa csa org.multipaz.csa.server.Main 8005
+  service verifier verifier org.multipaz.verifier.server.Main 8006
+  service backend backend org.multipaz.backend.server.Main 8008
+
+  if [ "$INIT" = "0" ]
+  then
+  echo "System of Records database exists, not loading initial data"
+  else
+  echo "Loading initial data into the System of Records..."
+  (
+    echo '{'
+    echo '"password": "'$ADMIN_PASS'",'
+    echo '"identities":'
+    cat /app/init/records.json
+    echo '}'
+  ) | curl --retry-connrefused --retry 5 -H "Content-Type: application/json" -d @- http://localhost:8004/identity/load
+  fi
 fi
 
 echo ""

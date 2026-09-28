@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.io.bytestring)
     implementation(libs.zxing.core)
+    implementation(libs.bouncy.castle.bcprov)
     implementation(libs.hsqldb)
     implementation(libs.mysql)
     implementation(libs.postgresql)

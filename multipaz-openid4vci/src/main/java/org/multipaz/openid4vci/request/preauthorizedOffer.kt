@@ -1,6 +1,7 @@
 package org.multipaz.openid4vci.request
 
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
@@ -17,6 +18,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import org.multipaz.crypto.Algorithm
 import org.multipaz.crypto.Crypto
+import org.multipaz.openid4vci.admin.AdminAuth
 import org.multipaz.openid4vci.credential.CredentialFactory
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
 import org.multipaz.openid4vci.util.IssuanceState
@@ -72,8 +74,19 @@ private const val OFFER_URL_SCHEMA = "haip-vci"
  * ```
  */
 suspend fun preauthorizedOffer(call: ApplicationCall) {
-    val baseUrl = BackendEnvironment.getBaseUrl()
     val configuration = BackendEnvironment.getInterface(Configuration::class)!!
+    // Restricted (docs/validatopia/PLAN.md's Component E) to the local machine, presenting the
+    // 'preauthorized_offer_secret' configured value in a header: nginx additionally denies this
+    // path from outside in the container profile, but this check keeps the endpoint safe even if
+    // reached some other way (e.g. MODE=direct, no nginx in front).
+    val configuredSecret = configuration.getValue("preauthorized_offer_secret")
+    val presentedSecret = call.request.headers["X-Preauthorized-Secret"]
+    val secretOk = configuredSecret.isNullOrEmpty() || presentedSecret == configuredSecret
+    if (!AdminAuth.isLoopbackCaller(call) || !secretOk) {
+        call.respondText(status = HttpStatusCode.Forbidden, text = "")
+        return
+    }
+    val baseUrl = BackendEnvironment.getBaseUrl()
     val request = Json.parseToJsonElement(call.receiveText()) as JsonObject
     val access = SystemOfRecordAccess(
         accessToken = request["access_token"]!!.jsonPrimitive.content,
