@@ -23,6 +23,8 @@ kotlin {
 
     jvm()
 
+    applyDefaultHierarchyTemplate()
+
     listOf(
         iosX64(),
         iosArm64(),
@@ -56,6 +58,14 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.test)
                 implementation(libs.kotlinx.coroutines.test)
+            }
+        }
+
+        val jvmTest by getting {
+            dependencies {
+                // So brainpool-curve tests can register BouncyCastle, matching multipaz's own
+                // src/jvmTest/kotlin/org/multipaz/testUtil.jvm.kt (not visible outside that module).
+                implementation(libs.bouncy.castle.bcprov)
             }
         }
     }
