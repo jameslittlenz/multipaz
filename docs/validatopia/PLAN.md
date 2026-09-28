@@ -386,6 +386,19 @@ The iOS builds and tests need macOS with Xcode. This Linux environment can't com
 6. Run use cases 1–5 across each combination: Android↔Android, iOS↔iOS and mixed.
 7. Revoke a credential in the admin site and show the verifier flags it.
 
+## Getting started in a development environment
+- **Branch:** `claude/upbeat-rubin-hap160` on `jameslittlenz/multipaz`. It is upstream `main` plus this plan (`docs/validatopia/PLAN.md`). No code has been written yet.
+- **Needed for M0–M4 and the server:**
+  - JDK 17 or later (21 works).
+  - Android SDK with `ANDROID_HOME` set, or `local.properties` with `sdk.dir`.
+  - Network access to `dl.google.com` and Maven Central.
+  - Docker or podman, for the container milestone.
+  - Two NFC-capable Android phones, plus NZ or AU passports for M6.
+- **Needed for M5 and the iOS half of M6:** macOS with Xcode, an Apple developer team (for the NFC and App Attest entitlements), and physical iPhones.
+- **Check the environment first:** `./gradlew :multipaz:jvmTest` must pass before any changes. That proves the toolchain works.
+- **Suggested first prompt for Claude Code:** "Read `docs/validatopia/PLAN.md` and `CLAUDE.md`, then implement milestone M0 and then M1. Run the listed Gradle tests after each and stop at the end of each milestone for review."
+- **Before M1's crypto work:** decide the Validatopia country codes, and have NZ and AU CSCA certificates available.
+
 ## Open questions / risks
 - The Validatopia codes: proposed alpha-2 `XV` and alpha-3 `XVA`, from the ISO user-assigned range. To be confirmed.
 - **Brainpool on iOS** is the hardest crypto gap. It only matters if NZ or AU passports use brainpool, which the M1 discovery task settles. Until it's done, those passports degrade gracefully to "unsupported on device".
