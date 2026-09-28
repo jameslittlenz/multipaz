@@ -444,20 +444,53 @@ import AuthenticationServices
         }
     }
 
-    @objc(ecVerifySignature: : : :) public class func ecVerifySignature(publicKeyCurve: Int, publicKeyRepresentation: Data, dataThatWasSigned: Data, signature: Data) -> Bool {
+    // `hashAlgorithm` ("SHA256", "SHA384" or "SHA512") is honored independently of
+    // `publicKeyCurve`: CryptoKit's `isValidSignature(_:for: Data)` convenience overload always
+    // hashes with a fixed, curve-implied algorithm (SHA256 for P256, SHA384 for P384, SHA512 for
+    // P521), which silently gives the wrong answer for a caller-specified hash that doesn't match
+    // that default. Hashing the message ourselves and calling the `Digest`-accepting overload
+    // instead makes the hash explicit.
+    @objc(ecVerifySignature: : : : :) public class func ecVerifySignature(
+        publicKeyCurve: Int,
+        hashAlgorithm: String,
+        publicKeyRepresentation: Data,
+        dataThatWasSigned: Data,
+        signature: Data
+    ) -> Bool {
         switch (publicKeyCurve) {
         case CURVE_P256:
-            let key = try! P256.Signing.PublicKey(rawRepresentation: publicKeyRepresentation)
-            let ecdsaSignature = try! P256.Signing.ECDSASignature(rawRepresentation: signature)
-            return key.isValidSignature(ecdsaSignature, for: dataThatWasSigned)
+            guard let key = try? P256.Signing.PublicKey(rawRepresentation: publicKeyRepresentation),
+                  let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: signature) else {
+                return false
+            }
+            switch hashAlgorithm {
+            case "SHA256": return key.isValidSignature(ecdsaSignature, for: SHA256.hash(data: dataThatWasSigned))
+            case "SHA384": return key.isValidSignature(ecdsaSignature, for: SHA384.hash(data: dataThatWasSigned))
+            case "SHA512": return key.isValidSignature(ecdsaSignature, for: SHA512.hash(data: dataThatWasSigned))
+            default: return false
+            }
         case CURVE_P384:
-            let key = try! P384.Signing.PublicKey(rawRepresentation: publicKeyRepresentation)
-            let ecdsaSignature = try! P384.Signing.ECDSASignature(rawRepresentation: signature)
-            return key.isValidSignature(ecdsaSignature, for: dataThatWasSigned)
+            guard let key = try? P384.Signing.PublicKey(rawRepresentation: publicKeyRepresentation),
+                  let ecdsaSignature = try? P384.Signing.ECDSASignature(rawRepresentation: signature) else {
+                return false
+            }
+            switch hashAlgorithm {
+            case "SHA256": return key.isValidSignature(ecdsaSignature, for: SHA256.hash(data: dataThatWasSigned))
+            case "SHA384": return key.isValidSignature(ecdsaSignature, for: SHA384.hash(data: dataThatWasSigned))
+            case "SHA512": return key.isValidSignature(ecdsaSignature, for: SHA512.hash(data: dataThatWasSigned))
+            default: return false
+            }
         case CURVE_P521:
-            let key = try! P521.Signing.PublicKey(rawRepresentation: publicKeyRepresentation)
-            let ecdsaSignature = try! P521.Signing.ECDSASignature(rawRepresentation: signature)
-            return key.isValidSignature(ecdsaSignature, for: dataThatWasSigned)
+            guard let key = try? P521.Signing.PublicKey(rawRepresentation: publicKeyRepresentation),
+                  let ecdsaSignature = try? P521.Signing.ECDSASignature(rawRepresentation: signature) else {
+                return false
+            }
+            switch hashAlgorithm {
+            case "SHA256": return key.isValidSignature(ecdsaSignature, for: SHA256.hash(data: dataThatWasSigned))
+            case "SHA384": return key.isValidSignature(ecdsaSignature, for: SHA384.hash(data: dataThatWasSigned))
+            case "SHA512": return key.isValidSignature(ecdsaSignature, for: SHA512.hash(data: dataThatWasSigned))
+            default: return false
+            }
         default:
             return false
         }

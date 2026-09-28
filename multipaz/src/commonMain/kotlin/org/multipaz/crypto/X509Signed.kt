@@ -158,6 +158,7 @@ sealed class X509Signed() {
                 OID.SIGNATURE_RS256.oid -> Algorithm.RS256
                 OID.SIGNATURE_RS384.oid -> Algorithm.RS384
                 OID.SIGNATURE_RS512.oid -> Algorithm.RS512
+                OID.SIGNATURE_RSASSA_PSS.oid -> rsaSsaPssAlgorithm()
                 OID.ML_DSA_44.oid -> Algorithm.ML_DSA_44
                 OID.ML_DSA_65.oid -> Algorithm.ML_DSA_65
                 OID.ML_DSA_87.oid -> Algorithm.ML_DSA_87
@@ -165,6 +166,28 @@ sealed class X509Signed() {
                     "Unexpected algorithm OID $signatureAlgorithmOid")
             }
         }
+
+    /**
+     * Disambiguates PS256/PS384/PS512, which all share [OID.SIGNATURE_RSASSA_PSS], by parsing the
+     * `RSASSA-PSS-params.hashAlgorithm` field (RFC 4055 Section 3.1). A missing field means the
+     * RFC 4055 default of SHA-1, which this SDK doesn't support for signing or verification.
+     */
+    private fun rsaSsaPssAlgorithm(): Algorithm {
+        val params = (parsed.elements[1] as ASN1Sequence).elements[1] as ASN1Sequence
+        val hashAlgorithmTag = params.elements
+            .filterIsInstance<ASN1TaggedObject>()
+            .firstOrNull { it.tag == 0 }
+            ?: throw IllegalArgumentException(
+                "RSASSA-PSS-params without an explicit hashAlgorithm (implied SHA-1) is not supported")
+        val hashAlgorithmSeq = ASN1.decode(hashAlgorithmTag.content) as ASN1Sequence
+        val hashOid = (hashAlgorithmSeq.elements[0] as ASN1ObjectIdentifier).oid
+        return when (hashOid) {
+            OID.SHA256.oid -> Algorithm.PS256
+            OID.SHA384.oid -> Algorithm.PS384
+            OID.SHA512.oid -> Algorithm.PS512
+            else -> throw IllegalArgumentException("Unsupported RSASSA-PSS hash algorithm OID $hashOid")
+        }
+    }
 
     /**
      * The OIDs for X.509 extensions which are marked as critical.
@@ -394,7 +417,10 @@ sealed class X509SignedBuilder<BuilderT: X509SignedBuilder<BuilderT>>(
             Algorithm.EDDSA, Algorithm.ED25519, Algorithm.ED448 -> signature.toCoseEncoded()
             Algorithm.RS256, Algorithm.RS256_2048, Algorithm.RS256_3072, Algorithm.RS256_4096,
             Algorithm.RS384, Algorithm.RS384_3072, Algorithm.RS384_4096,
-            Algorithm.RS512, Algorithm.RS512_4096 -> signature.toDerEncoded()
+            Algorithm.RS512, Algorithm.RS512_4096,
+            Algorithm.PS256, Algorithm.PS256_2048, Algorithm.PS256_3072, Algorithm.PS256_4096,
+            Algorithm.PS384, Algorithm.PS384_3072, Algorithm.PS384_4096,
+            Algorithm.PS512, Algorithm.PS512_4096 -> signature.toDerEncoded()
             Algorithm.ML_DSA_44, Algorithm.ML_DSA_65, Algorithm.ML_DSA_87 -> signature.toCoseEncoded()
             else -> throw IllegalArgumentException("Unsupported signature algorithm ${signingKey.algorithm}")
         }
@@ -430,6 +456,12 @@ sealed class X509SignedBuilder<BuilderT: X509SignedBuilder<BuilderT>>(
                     ASN1ObjectIdentifier(OID.SIGNATURE_RS512.oid),
                     ASN1Null()
                 ))
+                Algorithm.PS256, Algorithm.PS256_2048, Algorithm.PS256_3072, Algorithm.PS256_4096 ->
+                    rsaSsaPssParamsSeq(OID.SHA256.oid, saltLength = 32)
+                Algorithm.PS384, Algorithm.PS384_3072, Algorithm.PS384_4096 ->
+                    rsaSsaPssParamsSeq(OID.SHA384.oid, saltLength = 48)
+                Algorithm.PS512, Algorithm.PS512_4096 ->
+                    rsaSsaPssParamsSeq(OID.SHA512.oid, saltLength = 64)
                 Algorithm.ES256, Algorithm.ESP256, Algorithm.ESB256 ->
                     ASN1Sequence(listOf(ASN1ObjectIdentifier("1.2.840.10045.4.3.2")))
                 Algorithm.ES384, Algorithm.ESP384, Algorithm.ESB384, Algorithm.ESB320 ->
@@ -449,6 +481,29 @@ sealed class X509SignedBuilder<BuilderT: X509SignedBuilder<BuilderT>>(
                     throw IllegalArgumentException("Unsupported signature algorithm $this")
                 }
             }
+        }
+
+        /**
+         * Builds the RFC 4055 Section 3.1 `RSASSA-PSS-params` SEQUENCE for a given hash algorithm,
+         * with MGF1 (using the same hash) as the mask generation function and a salt length equal
+         * to the hash's output size, matching what [Crypto] uses when signing PS256/PS384/PS512
+         * (see the `PSSParameterSpec` construction in the platform `Crypto` implementations).
+         */
+        private fun rsaSsaPssParamsSeq(hashOid: String, saltLength: Int): ASN1Sequence {
+            val hashAlgorithmId = ASN1Sequence(listOf(ASN1ObjectIdentifier(hashOid), ASN1Null()))
+            val maskGenAlgorithmId = ASN1Sequence(listOf(
+                ASN1ObjectIdentifier(OID.MGF1.oid),
+                hashAlgorithmId
+            ))
+            val params = ASN1Sequence(listOf(
+                ASN1TaggedObject(ASN1TagClass.CONTEXT_SPECIFIC, ASN1Encoding.CONSTRUCTED, 0, ASN1.encode(hashAlgorithmId)),
+                ASN1TaggedObject(ASN1TagClass.CONTEXT_SPECIFIC, ASN1Encoding.CONSTRUCTED, 1, ASN1.encode(maskGenAlgorithmId)),
+                ASN1TaggedObject(ASN1TagClass.CONTEXT_SPECIFIC, ASN1Encoding.CONSTRUCTED, 2, ASN1.encode(ASN1Integer(saltLength.toLong()))),
+            ))
+            return ASN1Sequence(listOf(
+                ASN1ObjectIdentifier(OID.SIGNATURE_RSASSA_PSS.oid),
+                params
+            ))
         }
 
         internal fun EcCurve.getCurveAlgorithmSeq(): ASN1Sequence {

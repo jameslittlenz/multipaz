@@ -162,8 +162,15 @@ actual object Crypto {
             is EcPublicKeyDoubleCoordinate -> publicKey.x + publicKey.y
             is EcPublicKeyOkp -> publicKey.x
         }
+        val hashAlgorithmName = when (algorithm) {
+            Algorithm.ES256, Algorithm.ESP256, Algorithm.ESB256 -> "SHA256"
+            Algorithm.ES384, Algorithm.ESP384, Algorithm.ESB384, Algorithm.ESB320 -> "SHA384"
+            Algorithm.ES512, Algorithm.ESP512, Algorithm.ESB512 -> "SHA512"
+            else -> throw IllegalArgumentException("Unsupported EC signature algorithm $algorithm")
+        }
         if (!SwiftBridge.ecVerifySignature(
             publicKey.curve.coseCurveIdentifier.toLong(),
+            hashAlgorithmName,
             raw.toNSData(),
             message.toNSData(),
             (signature.r + signature.s).toNSData()

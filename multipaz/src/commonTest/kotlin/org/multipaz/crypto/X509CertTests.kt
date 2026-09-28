@@ -277,6 +277,33 @@ class X509CertTests {
         }
     }
 
+    // Checks that X509Cert.verify() works with certificates signed using RSASSA-PSS, and that
+    // PS256/PS384/PS512 - which all share the same signature algorithm OID and are only
+    // distinguished by the RSASSA-PSS-params.hashAlgorithm field - round-trip correctly.
+    private fun testCertSignedWithPss(algorithm: Algorithm) = runTest {
+        val rsaKey = Crypto.createRsaPrivateKey(2048)
+        val now = Instant.fromEpochSeconds(Clock.System.now().epochSeconds)
+        val subject = X500Name.fromName("CN=RsaPssCert")
+        val cert = X509Cert.Builder(
+            publicKey = rsaKey.publicKey,
+            signingKey = AsymmetricKey.anonymous(rsaKey, algorithm),
+            serialNumber = ASN1Integer(1),
+            subject = subject,
+            issuer = subject,
+            validFrom = now - 1.hours,
+            validUntil = now + 1.hours
+        ).build()
+
+        cert.verify(rsaKey.publicKey)
+
+        assertEquals(algorithm, cert.signatureAlgorithm)
+        assertEquals(rsaKey.publicKey, cert.publicKey)
+    }
+
+    @Test fun testCertSignedWithPss_PS256() = testCertSignedWithPss(Algorithm.PS256)
+    @Test fun testCertSignedWithPss_PS384() = testCertSignedWithPss(Algorithm.PS384)
+    @Test fun testCertSignedWithPss_PS512() = testCertSignedWithPss(Algorithm.PS512)
+
     @Test
     fun testKeyUsageEncoding() {
         assertEquals(
