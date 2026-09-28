@@ -159,6 +159,7 @@ val detektModules = listOf(
     ":multipaz-dcapi",
     ":multipaz-doctypes",
     ":multipaz-longfellow",
+    ":multipaz-idv",
 )
 
 subprojects {
