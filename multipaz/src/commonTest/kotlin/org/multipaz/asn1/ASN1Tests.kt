@@ -52,6 +52,27 @@ class ASN1Tests {
     }
 
     @Test
+    fun testLongFormLengthsRoundTrip() {
+        // One length per long-form size: 1, 2, 3 and 4 length octets.
+        for ((length, lengthOctets) in listOf(0x80 to "8180", 0x100 to "820100", 0x10000 to "83010000",
+            0x1000000 to "8401000000")) {
+            val encoded = encodeTLV(ASN1TagClass.UNIVERSAL, ASN1Encoding.PRIMITIVE, 0x04, length)
+            assertEquals("04$lengthOctets", encoded.toHex())
+            assertEquals(Pair(encoded.size, length), ASN1.decodeLength(encoded, 1))
+        }
+        // An OCTET STRING whose length needs three octets, as for a large DG2 face image.
+        val octets = ASN1OctetString(ByteArray(70_000) { it.toByte() })
+        assertEquals(octets, ASN1.decode(ASN1.encode(octets)))
+    }
+
+    @Test
+    fun testInvalidLengths() {
+        assertFailsWith<IllegalArgumentException> { ASN1.decode("0480".fromHex()) }
+        assertFailsWith<IllegalArgumentException> { ASN1.decode("04850000000001".fromHex()) }
+        assertFailsWith<IllegalArgumentException> { ASN1.decode("048480000000".fromHex()) }
+    }
+
+    @Test
     fun testBoolean() {
         assertContentEquals("010100".fromHex(), ASN1.encode(ASN1Boolean(false)))
         assertContentEquals("0101ff".fromHex(), ASN1.encode(ASN1Boolean(true)))

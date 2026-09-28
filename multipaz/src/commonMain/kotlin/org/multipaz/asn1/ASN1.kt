@@ -97,16 +97,22 @@ object ASN1 {
             Pair(offset + 1, length)
         }
         else {
-            Pair(
-                offset + 1 + numOctets,
-                when (numOctets) {
-                    0 -> throw IllegalArgumentException("Indeterminate length not supported")
-                    1 -> derEncoded.getUInt8(offset + 1).toInt()
-                    2 -> derEncoded.getUInt16(offset + 1).toInt()
-                    4 -> derEncoded.getUInt32(offset + 1).toInt()
-                    else -> throw IllegalArgumentException("Length size of $numOctets bytes not supported")
-                }
-            )
+            if (numOctets == 0) {
+                throw IllegalArgumentException("Indeterminate length not supported")
+            }
+            if (numOctets > 4) {
+                throw IllegalArgumentException("Length size of $numOctets bytes not supported")
+            }
+            // Long form: numOctets big-endian octets. appendIdentifierAndLength() emits the minimal
+            // number of octets, so all of 1-4 occur (e.g. 3 for lengths from 64 KiB up to 16 MiB).
+            var value = 0L
+            for (n in 0 until numOctets) {
+                value = (value shl 8) or derEncoded.getUInt8(offset + 1 + n).toLong()
+            }
+            if (value > Int.MAX_VALUE) {
+                throw IllegalArgumentException("Length $value too large")
+            }
+            Pair(offset + 1 + numOctets, value.toInt())
         }
     }
 
