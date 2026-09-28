@@ -32,7 +32,16 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 implementation(compose.ui)
+                implementation(compose.materialIconsExtended)
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.biometrics)
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.android)
+                implementation(libs.kotlinx.datetime)
+                implementation(libs.kotlinx.io.bytestring)
+                implementation(project(":multipaz"))
+                implementation(project(":multipaz-compose"))
+                implementation(project(":multipaz-doctypes"))
                 implementation(project(":samples:validatopia:shared"))
             }
         }
@@ -45,7 +54,8 @@ android {
 
     defaultConfig {
         applicationId = "org.multipaz.samples.validatopia.verifier"
-        minSdk = libs.versions.android.minSdk.get().toInt()
+        // multipaz-compose requires API 29.
+        minSdk = 29
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = projectVersionCode
         versionName = projectVersionName
@@ -58,5 +68,12 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    packaging {
+        resources {
+            excludes += listOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+        }
     }
 }

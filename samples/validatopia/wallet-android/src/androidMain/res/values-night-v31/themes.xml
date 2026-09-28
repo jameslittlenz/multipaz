@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Navy in dark mode, with the white VALID8 logo. -->
+    <style name="Theme.Validatopia" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/validatopia_navy</item>
+        <item name="android:windowSplashScreenBackground">@color/validatopia_navy</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/valid8_advisory_logo_white</item>
+    </style>
+</resources>

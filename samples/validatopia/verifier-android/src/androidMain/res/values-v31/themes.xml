@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- System splash: Validatopia white, with "powered by" VALID8 Advisory as the branding image. -->
+    <style name="Theme.Validatopia" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/valid8_advisory_logo</item>
+    </style>
+</resources>

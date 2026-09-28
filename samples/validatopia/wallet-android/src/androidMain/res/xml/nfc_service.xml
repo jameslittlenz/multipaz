@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:description="@string/nfc_service_description"
+    android:requireDeviceUnlock="false"
+    android:requireDeviceScreenOn="false"
+    tools:ignore="UnusedAttribute">
+
+    <aid-group android:description="@string/nfc_mdoc_engagement_aid_group" android:category="other">
+        <!-- ISO/IEC 18013-5 Second Edition NFC engagement -->
+        <aid-filter android:name="A0000002480401" />
+    </aid-group>
+
+    <aid-group android:description="@string/nfc_ndef_aid_group" android:category="other">
+        <!-- NFC Forum Type 4 Tag (static and negotiated handover) -->
+        <aid-filter android:name="D2760000850101" />
+    </aid-group>
+
+    <aid-group android:description="@string/nfc_data_transfer_aid_group" android:category="other">
+        <!-- ISO/IEC 18013-5:2021 clause 8.3.3.1.2 NFC data transfer -->
+        <aid-filter android:name="A0000002480400" />
+    </aid-group>
+
+</host-apdu-service>

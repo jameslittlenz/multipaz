@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Validatopia Wallet</string>
+    <string name="nfc_service_description">Validatopia Photo ID</string>
+    <string name="nfc_mdoc_engagement_aid_group">Share your Photo ID by NFC</string>
+    <string name="nfc_ndef_aid_group">Share your Photo ID by NFC (handover)</string>
+    <string name="nfc_data_transfer_aid_group">Share your Photo ID over NFC</string>
 </resources>
