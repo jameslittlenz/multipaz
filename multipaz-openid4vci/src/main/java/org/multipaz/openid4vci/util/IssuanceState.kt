@@ -33,6 +33,10 @@ data class IssuanceState(
     var systemOfRecordAuthCode: String? = null,
     var systemOfRecordCodeVerifier: ByteString? = null,
     var systemOfRecordAccess: SystemOfRecordAccess? = null,
+    // Encrypted (via SimpleCipher) CBOR system-of-record data, set directly by identity-proofing
+    // flows (e.g. Validatopia's `/idv/evidence`) that don't go through an external System of
+    // Record. Checked first by readSystemOfRecord() in request/credential.kt.
+    var systemOfRecordData: ByteString? = null,
     var txCodeSpec: SecretCodeRequest? = null,
     var txCodeHash: ByteString? = null,
     val urlSchema: String? = null,  // for pre-authorized code generation

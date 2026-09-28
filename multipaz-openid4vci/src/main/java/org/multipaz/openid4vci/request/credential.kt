@@ -16,6 +16,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.io.bytestring.ByteString
 import kotlinx.io.bytestring.decodeToString
 import org.multipaz.rpc.handler.InvalidRequestException
+import org.multipaz.rpc.handler.SimpleCipher
 import org.multipaz.rpc.backend.BackendEnvironment
 import org.multipaz.util.fromBase64Url
 import kotlinx.serialization.json.Json
@@ -392,6 +393,13 @@ private suspend fun readSystemOfRecord(
     stateId: String,
     state: IssuanceState
 ): DataItem {
+    val systemOfRecordData = state.systemOfRecordData
+    if (systemOfRecordData != null) {
+        // Set directly by an identity-proofing flow (e.g. Validatopia's `/idv/evidence`) that
+        // isn't backed by an external System of Record.
+        val cipher = BackendEnvironment.getInterface(SimpleCipher::class)!!
+        return Cbor.decode(cipher.decrypt(systemOfRecordData.toByteArray()))
+    }
     val systemOfRecordUrl = BackendEnvironment.getSystemOfRecordUrl()
     if (systemOfRecordUrl == null) {
         // Running without System of Record (demo/dev mode). Expect basic data encoded

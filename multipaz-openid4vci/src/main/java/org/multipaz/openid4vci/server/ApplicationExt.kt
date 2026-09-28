@@ -6,9 +6,12 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Deferred
 import org.multipaz.openid4vci.request.adminAuth
+import org.multipaz.openid4vci.request.adminIdvAudit
+import org.multipaz.openid4vci.request.adminIdvSettings
 import org.multipaz.openid4vci.request.adminSessionInfo
 import org.multipaz.openid4vci.request.adminListSessions
 import org.multipaz.openid4vci.request.adminSetCredentialStatus
+import org.multipaz.openid4vci.request.adminUpdateIdvSettings
 import org.multipaz.openid4vci.request.authorizeChallenge
 import org.multipaz.openid4vci.request.authorizeGet
 import org.multipaz.openid4vci.request.authorizePost
@@ -17,6 +20,10 @@ import org.multipaz.openid4vci.request.credential
 import org.multipaz.openid4vci.request.credentialRequest
 import org.multipaz.openid4vci.request.finishAuthorization
 import org.multipaz.openid4vci.request.identifierList
+import org.multipaz.openid4vci.request.idvEvidence
+import org.multipaz.openid4vci.request.idvPersona
+import org.multipaz.openid4vci.request.idvPersonas
+import org.multipaz.openid4vci.request.idvStart
 import org.multipaz.openid4vci.request.preauthorizedOffer
 import org.multipaz.openid4vci.request.nonce
 import org.multipaz.openid4vci.request.openid4VpResponse
@@ -76,5 +83,21 @@ fun Application.configureRouting(serverEnvironment: Deferred<ServerEnvironment>)
             validateAdminCookie(call)
             adminSetCredentialStatus(call)
         }
+        get("/admin_idv_settings") {
+            validateAdminCookie(call)
+            adminIdvSettings(call)
+        }
+        post("/admin_idv_settings") {
+            validateAdminCookie(call)
+            adminUpdateIdvSettings(call)
+        }
+        get("/admin_idv_audit") {
+            validateAdminCookie(call)
+            adminIdvAudit(call)
+        }
+        post("/idv/start") { idvStart(call) }
+        post("/idv/evidence") { idvEvidence(call) }
+        get("/idv/personas") { idvPersonas(call) }
+        post("/idv/persona") { idvPersona(call) }
     }
 }

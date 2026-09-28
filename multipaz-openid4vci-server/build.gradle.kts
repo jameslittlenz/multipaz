@@ -31,6 +31,7 @@ dependencies {
     implementation(project(":multipaz-utopia"))
     implementation(project(":multipaz-server"))
     implementation(project(":multipaz-openid4vci"))
+    implementation(project(":multipaz-idv-backend"))
 
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.serialization.json)
