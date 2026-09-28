@@ -35,7 +35,12 @@ This reflects multipaz's encoding of the standard and should be cross-checked ag
 
 ### Target passports: New Zealand (NZL) and Australia (AUS)
 - **Trust:** the default CSCA store in both the server and the verifier contains the **NZL and AUS CSCA certificates**, plus the Validatopia Test CSCA.
-  - Source them from the issuing authorities, the ICAO PKD, or a published CSCA master list that includes them.
+  - Sources:
+    - The **ICAO Master List** (https://www.icao.int/icao-pkd/icao-master-list), plus PKD document signer certificates and CRLs (https://download.pkd.icao.int/). This is the primary source for both countries.
+    - **AU direct:** the Australian Passport Office page (https://www.passports.gov.au/help/australian-country-signing-certificate-authority-csca), which lists the DER files and the CRL. The subject is `CN=Passport Country Signing Authority, OU=APO, OU=DFAT, O=GOV, C=AU`.
+    - **NZ:** the ICAO Master List, cross-checked against the BSI German Master List. Ask DIA if a third confirmation is needed.
+  - Verify each master list's signer before importing it. Keep link certificates too.
+  - Cross-check fingerprints between at least two sources.
   - Record the fingerprints and expiry dates.
   - Other countries are accepted only in demo mode, flagged `UNTRUSTED_CSCA`, or once an admin uploads their CSCA.
 - **M1 discovery task, before building crypto:** read real NZ and AU passports and inspect their CSCA certificates. Record:
