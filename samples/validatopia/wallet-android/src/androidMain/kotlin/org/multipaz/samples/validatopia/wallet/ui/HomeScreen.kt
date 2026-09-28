@@ -25,6 +25,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.multipaz.compose.document.DocumentInfo
 import org.multipaz.samples.validatopia.shared.ui.PoweredByValid8
@@ -102,10 +104,15 @@ private fun PhotoIdCard(documentInfo: DocumentInfo, onClick: () -> Unit) {
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
             )
-            Text(text = name, style = MaterialTheme.typography.titleMedium)
-            documentInfo.document.typeDisplayName?.let {
-                Text(text = it, style = MaterialTheme.typography.bodyMedium)
-            }
+            // The card itself carries no identifying information (NZ DISTF flash pass guidance);
+            // only this caption says whose Photo ID it is.
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

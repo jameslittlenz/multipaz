@@ -5,7 +5,7 @@
     "sorotokin.com/**"
   ],
   "credential_photo_id": {
-    "title": "{core.given_name} {core.family_name}"
+    "title": "{core.given_name}'s Photo ID"
   },
   "credential_mdl": {
     "title": "{core.given_name}'s driver license",

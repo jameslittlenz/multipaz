@@ -26,5 +26,5 @@ private class WalletBranding(
     }
 
     // The issuer supplies no card art, so every Photo ID is drawn here.
-    override suspend fun renderFallbackCardArt(document: Document): ImageBitmap = cardArt.render(document)
+    override suspend fun renderFallbackCardArt(document: Document): ImageBitmap = cardArt.image
 }

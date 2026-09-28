@@ -1,128 +1,99 @@
 package org.multipaz.samples.validatopia.wallet.ui
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.QrCode
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import org.multipaz.claim.MdocClaim
-import org.multipaz.compose.claim.RenderClaimValue
-import org.multipaz.documenttype.knowntypes.PhotoID
-import org.multipaz.samples.validatopia.shared.ui.SectionHeading
 import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
 import org.multipaz.samples.validatopia.wallet.WalletModel
 
-/** One Photo ID: its card, how to share it, what it contains, and deletion. */
+/**
+ * The presenting screen for one Photo ID, following the NZ DISTF "flash pass" guidance: it shows
+ * how to share (tap a reader, or show a code), and a card with no identifying information. The
+ * holder's own details are a separate viewing screen, clearly marked as not for sharing.
+ */
 @Composable
 fun DocumentScreen(
     model: WalletModel,
     documentId: String,
     onBack: () -> Unit,
     onShowQr: (documentId: String) -> Unit,
-    onDeleted: () -> Unit,
+    onViewDetails: (documentId: String) -> Unit,
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val documentInfos by model.documentModel.documentInfos.collectAsState()
     val documentInfo = documentInfos.firstOrNull { it.document.identifier == documentId }
-    var confirmDelete by remember { mutableStateOf(false) }
+    val name = documentInfo?.document?.displayName ?: "Photo ID"
 
-    ValidatopiaScaffold(title = documentInfo?.document?.displayName ?: "Photo ID", onBack = onBack) {
+    ValidatopiaScaffold(title = name, onBack = onBack) {
         if (documentInfo == null) {
             Text("This Photo ID is no longer in the wallet.", style = MaterialTheme.typography.bodyLarge)
             return@ValidatopiaScaffold
         }
-        Image(
-            bitmap = documentInfo.cardArt,
-            contentDescription = null,
-            contentScale = ContentScale.FillWidth,
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { heading() },
+        ) {
+            Icon(Icons.Filled.Nfc, contentDescription = null, modifier = Modifier.size(48.dp))
+            Text(
+                text = "Tap reader or show code",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Image(
+                bitmap = documentInfo.cardArt,
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
+            )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            text = "Hold the back of your phone near the verifier's NFC reader (you don't need to open the " +
+                "app first), or show them a code to scan. Either way you'll see what's being asked for before " +
+                "anything is shared, and they check your Photo ID with their app. Showing your screen isn't proof.",
+            style = MaterialTheme.typography.bodyLarge,
         )
-
-        SectionHeading("Share")
         Button(onClick = { onShowQr(documentId) }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.QrCode, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Show QR code")
+            Text("Show code")
         }
-        Text(
-            text = "Or hold the back of your phone near the verifier's NFC reader. You don't need to open " +
-                "the app first. Either way, you'll see what's being asked for before anything is shared.",
-            style = MaterialTheme.typography.bodyLarge,
-        )
-
-        SectionHeading("What's on this Photo ID")
-        val claims = documentInfo.credentialInfos.firstOrNull()?.claims.orEmpty()
-        val (passportData, visible) = claims.partition {
-            it is MdocClaim && it.namespaceName == PhotoID.DATAGROUPS_NAMESPACE
+        OutlinedButton(onClick = { onViewDetails(documentId) }, modifier = Modifier.fillMaxWidth()) {
+            Text("View my details")
         }
-        for (claim in visible) {
-            Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-                Text(claim.displayName, style = MaterialTheme.typography.labelLarge)
-                RenderClaimValue(claim = claim)
-            }
-            HorizontalDivider()
-        }
-        if (passportData.isNotEmpty()) {
-            Text(
-                text = "It also carries the signed passport data it was issued from (SOD, DG1 and DG2). " +
-                    "Verifiers only get it if they ask and you agree, typically at a border. Sharing DG1 " +
-                    "reveals your full name, date of birth, sex, nationality, passport number and expiry " +
-                    "together.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        OutlinedButton(
-            onClick = { confirmDelete = true },
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Remove from this phone")
-        }
-    }
-
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text("Remove this Photo ID?") },
-            text = { Text("It's deleted from this phone. You can get a new one from the issuer at any time.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDelete = false
-                    coroutineScope.launch {
-                        model.documentStore.deleteDocument(documentId)
-                        onDeleted()
-                    }
-                }) { Text("Remove") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Keep") }
-            },
-        )
     }
 }

@@ -26,6 +26,8 @@ private object Routes {
     const val SETTINGS = "settings"
     const val DOCUMENT = "document/"
     const val PRESENT = "present/"
+    const val DETAILS = "details/"
+    const val PORTRAIT = "portrait/"
 }
 
 @Composable
@@ -94,7 +96,19 @@ fun WalletApp(model: WalletModel) {
             documentId = route.removePrefix(Routes.DOCUMENT),
             onBack = ::pop,
             onShowQr = { push(Routes.PRESENT + it) },
+            onViewDetails = { push(Routes.DETAILS + it) },
+        )
+        route.startsWith(Routes.DETAILS) -> MyDetailsScreen(
+            model = model,
+            documentId = route.removePrefix(Routes.DETAILS),
+            onBack = ::pop,
+            onViewPortrait = { push(Routes.PORTRAIT + it) },
             onDeleted = { resetTo(Routes.HOME) },
+        )
+        route.startsWith(Routes.PORTRAIT) -> PortraitScreen(
+            model = model,
+            documentId = route.removePrefix(Routes.PORTRAIT),
+            onBack = ::pop,
         )
         route.startsWith(Routes.PRESENT) -> PresentQrScreen(
             model = model,
