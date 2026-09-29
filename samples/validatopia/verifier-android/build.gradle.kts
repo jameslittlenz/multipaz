@@ -77,3 +77,47 @@ android {
         }
     }
 }
+
+// Debug builds only: -Pvalidatopia.devHost=<address> also allows plain HTTP to that host, for a
+// development issuer on the local network that a phone reaches directly (for example alongside an
+// iPhone, which can't use `adb reverse`). Without it, or in release builds, the checked-in
+// network_security_config.xml applies unchanged.
+val validatopiaDevHost = project.findProperty("validatopia.devHost") as String?
+
+abstract class ValidatopiaNetworkConfigTask : DefaultTask() {
+    @get:Input
+    abstract val devHost: Property<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val hosts = listOf("localhost", "127.0.0.1", "10.0.2.2", devHost.get())
+        val file = outputDir.file("xml/network_security_config.xml").get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            """
+            |<?xml version="1.0" encoding="utf-8"?>
+            |<!-- Generated for a debug build with -Pvalidatopia.devHost; see build.gradle.kts. -->
+            |<network-security-config>
+            |    <domain-config cleartextTrafficPermitted="true">
+            |${hosts.joinToString("\n") { "        <domain includeSubdomains=\"false\">$it</domain>" }}
+            |    </domain-config>
+            |</network-security-config>
+            |""".trimMargin()
+        )
+    }
+}
+
+if (validatopiaDevHost != null) {
+    val generateNetworkConfig = tasks.register<ValidatopiaNetworkConfigTask>("generateValidatopiaNetworkConfig") {
+        devHost.set(validatopiaDevHost)
+        outputDir.set(layout.buildDirectory.dir("generated/validatopiaNetworkConfig/res"))
+    }
+    androidComponents {
+        onVariants(selector().withBuildType("debug")) { variant ->
+            variant.sources.res?.addGeneratedSourceDirectory(generateNetworkConfig, ValidatopiaNetworkConfigTask::outputDir)
+        }
+    }
+}
