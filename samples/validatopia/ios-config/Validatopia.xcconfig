@@ -1,0 +1,18 @@
+// Build settings shared by Validatopia Wallet and Validatopia Verify on iOS.
+//
+// Anything specific to your machine or Apple developer account goes in DeveloperConfig.xcconfig
+// next to this file (gitignored; copy DeveloperConfig.xcconfig.template), which overrides these.
+
+// Bundle identifiers are $(VALIDATOPIA_BUNDLE_ID_PREFIX).wallet and .verifier.
+VALIDATOPIA_BUNDLE_ID_PREFIX = org.multipaz.samples.validatopia
+
+// The issuer the wallet uses until it's changed in the wallet's Settings: the Validatopia
+// container on this machine. ("$()" stops xcconfig reading "//" as a comment.)
+VALIDATOPIA_ISSUER_URL = http:/$()/localhost:8000/openid4vci
+
+// NFC reading in the verifier needs the "NFC Tag Reading" capability, which free (Personal Team)
+// accounts can't provision. DeveloperConfig.xcconfig switches both of these off for those.
+VALIDATOPIA_NFC_READING = YES
+VALIDATOPIA_VERIFY_ENTITLEMENTS = ValidatopiaVerify/ValidatopiaVerify.entitlements
+
+#include? "DeveloperConfig.xcconfig"

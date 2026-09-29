@@ -1,6 +1,5 @@
 # Validatopia Verify (iOS)
 
-Placeholder. The iOS verifier is built in milestone M5 of
-[`docs/validatopia/PLAN.md`](../../../docs/validatopia/PLAN.md), as a SwiftUI
-Xcode project in the style of `samples/SwiftTestApp`, consuming the
-`ValidatopiaShared` framework built from `samples/validatopia/shared`.
+SwiftUI verifier for the Validatopia Photo ID demo, consuming the `ValidatopiaShared` framework built
+from `samples/validatopia/shared` and `multipaz-swiftui` compiled from source. See
+[`../README.md`](../README.md) for building, running on a device and testing.

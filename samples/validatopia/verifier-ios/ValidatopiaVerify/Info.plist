@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ValidatopiaNfcReading</key>
+	<string>$(VALIDATOPIA_NFC_READING)</string>
+	<!-- ISO/IEC 18013-5 NFC engagement: NDEF Type 4 tag, then the mdoc applications. -->
+	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
+	<array>
+		<string>D2760000850101</string>
+		<string>A0000002471001</string>
+		<string>A0000002480400</string>
+		<string>A0000002480401</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Status lists from a development issuer on the local network are plain HTTP. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

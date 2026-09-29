@@ -19,6 +19,7 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 samples/testapp/iosApp/DeveloperConfig.xcconfig
+samples/validatopia/ios-config/DeveloperConfig.xcconfig
 
 # HSQLDB runtime files
 db.hsqldb.*

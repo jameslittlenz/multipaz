@@ -1,0 +1,17 @@
+// Local Xcode settings for the Validatopia iOS apps. Copy to DeveloperConfig.xcconfig (gitignored).
+
+// Your Apple development team ID (Xcode > Settings > Accounts), without quotes. Needed to run on
+// a device; simulator builds don't need it.
+DEVELOPMENT_TEAM =
+
+// A bundle identifier prefix you can register. The apps append .wallet and .verifier.
+VALIDATOPIA_BUNDLE_ID_PREFIX =
+
+// The issuer the wallet starts with. A phone can't reach this Mac's "localhost"; use the Mac's
+// address on the local network, and start the issuer with the same base_url.
+// VALIDATOPIA_ISSUER_URL = http:/$()/192.168.1.10:8007
+
+// Free (Personal Team) accounts can't provision NFC tag reading. Uncomment both lines to build the
+// verifier without it (it then reads by QR code only).
+// VALIDATOPIA_NFC_READING = NO
+// VALIDATOPIA_VERIFY_ENTITLEMENTS =

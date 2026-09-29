@@ -1,0 +1,488 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		ED095595BA416FF5BF134AFB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A881FC47F36E1D6ED472C9F2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 06DAF5D5AE9F8FFC00192350;
+			remoteInfo = ValidatopiaWallet;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		6A9812F45F3227D6AAED0D7D /* ValidatopiaWalletUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ValidatopiaWalletUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D49B383417FA96EB9F03686 /* ValidatopiaWallet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ValidatopiaWallet.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EFBA5CBC212E6BA5665A5BC7 /* Validatopia.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Validatopia.xcconfig; path = "../ios-config/Validatopia.xcconfig"; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5EA2777CBEFBC42370DB1CBE /* Exceptions for "ValidatopiaWallet" folder in "ValidatopiaWallet" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 06DAF5D5AE9F8FFC00192350 /* ValidatopiaWallet */;
+		};
+		4CC76BCDB3F049F7945052B9 /* Exceptions for "multipaz-swiftui" folder in "ValidatopiaWallet" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				VerticalCardList.swift,
+			);
+			target = 06DAF5D5AE9F8FFC00192350 /* ValidatopiaWallet */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		99EE23E7B5D78176F0B0E7CC /* ValidatopiaWallet */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5EA2777CBEFBC42370DB1CBE /* Exceptions for "ValidatopiaWallet" folder in "ValidatopiaWallet" target */,
+			);
+			path = ValidatopiaWallet;
+			sourceTree = "<group>";
+		};
+		8439A5441971E0763ABF7506 /* ios-common */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = "ios-common";
+			path = "../ios-common";
+			sourceTree = SOURCE_ROOT;
+		};
+		853C66D1A04966B72AD40B6B /* multipaz-swiftui */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4CC76BCDB3F049F7945052B9 /* Exceptions for "multipaz-swiftui" folder in "ValidatopiaWallet" target */,
+			);
+			name = "multipaz-swiftui";
+			path = "../../../multipaz-swiftui/src/iosMain/swift";
+			sourceTree = SOURCE_ROOT;
+		};
+		80C4E8677C38145F376B8F38 /* ValidatopiaWalletUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ValidatopiaWalletUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CCC4E04E461117AC38C2F5B4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		245091F77CF71E84CE4872B7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2872E5441F5C80D5BB57B396 = {
+			isa = PBXGroup;
+			children = (
+				99EE23E7B5D78176F0B0E7CC /* ValidatopiaWallet */,
+				8439A5441971E0763ABF7506 /* ios-common */,
+				853C66D1A04966B72AD40B6B /* multipaz-swiftui */,
+				80C4E8677C38145F376B8F38 /* ValidatopiaWalletUITests */,
+				EFBA5CBC212E6BA5665A5BC7 /* Validatopia.xcconfig */,
+				F51782ADD8A7FCA3C81027C3 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F51782ADD8A7FCA3C81027C3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4D49B383417FA96EB9F03686 /* ValidatopiaWallet.app */,
+				6A9812F45F3227D6AAED0D7D /* ValidatopiaWalletUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		06DAF5D5AE9F8FFC00192350 /* ValidatopiaWallet */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F2D9F870C5F32F4A70D8E7D2 /* Build configuration list for PBXNativeTarget "ValidatopiaWallet" */;
+			buildPhases = (
+				B9D5601A06BA534784D77292 /* Compile Kotlin Framework */,
+				2A862AAD89A20C09489D0311 /* Sources */,
+				CCC4E04E461117AC38C2F5B4 /* Frameworks */,
+				CEACD280575C53BD2EAB3D16 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				99EE23E7B5D78176F0B0E7CC /* ValidatopiaWallet */,
+				8439A5441971E0763ABF7506 /* ios-common */,
+				853C66D1A04966B72AD40B6B /* multipaz-swiftui */,
+			);
+			name = ValidatopiaWallet;
+			packageProductDependencies = (
+			);
+			productName = ValidatopiaWallet;
+			productReference = 4D49B383417FA96EB9F03686 /* ValidatopiaWallet.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9FC3BC506245961F6BBCA1EE /* ValidatopiaWalletUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EAD6C94ED80A37DCF69ED424 /* Build configuration list for PBXNativeTarget "ValidatopiaWalletUITests" */;
+			buildPhases = (
+				D742E955898FC7B16DA2680A /* Sources */,
+				245091F77CF71E84CE4872B7 /* Frameworks */,
+				62C9ADD72F207683B8EEE964 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8F1DC982BACD79A15D48A33A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				80C4E8677C38145F376B8F38 /* ValidatopiaWalletUITests */,
+			);
+			name = ValidatopiaWalletUITests;
+			packageProductDependencies = (
+			);
+			productName = ValidatopiaWalletUITests;
+			productReference = 6A9812F45F3227D6AAED0D7D /* ValidatopiaWalletUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A881FC47F36E1D6ED472C9F2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					06DAF5D5AE9F8FFC00192350 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					9FC3BC506245961F6BBCA1EE = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 06DAF5D5AE9F8FFC00192350;
+					};
+				};
+			};
+			buildConfigurationList = 4406234D2DAD42D69DD19329 /* Build configuration list for PBXProject "ValidatopiaWallet" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 2872E5441F5C80D5BB57B396;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F51782ADD8A7FCA3C81027C3 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				06DAF5D5AE9F8FFC00192350 /* ValidatopiaWallet */,
+				9FC3BC506245961F6BBCA1EE /* ValidatopiaWalletUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CEACD280575C53BD2EAB3D16 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		62C9ADD72F207683B8EEE964 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		B9D5601A06BA534784D77292 /* Compile Kotlin Framework */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Compile Kotlin Framework";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/../../..\"\n./gradlew :samples:validatopia:shared:embedAndSignAppleFrameworkForXcode\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		2A862AAD89A20C09489D0311 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D742E955898FC7B16DA2680A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8F1DC982BACD79A15D48A33A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 06DAF5D5AE9F8FFC00192350 /* ValidatopiaWallet */;
+			targetProxy = ED095595BA416FF5BF134AFB /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2ADE52D74BD179EA32F58376 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = EFBA5CBC212E6BA5665A5BC7 /* Validatopia.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		E717BD8A03E8F2A2DA91933C /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = EFBA5CBC212E6BA5665A5BC7 /* Validatopia.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		D7C58280CF45D5BD228BB44F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ValidatopiaWallet/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Validatopia Wallet";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Validatopia Wallet uses Bluetooth to send your Photo ID to a verifier's phone, only after you agree.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID confirms it's you before your Photo ID is shared.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Validatopia Wallet connects to a Validatopia issuer on your local network, for development.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(VALIDATOPIA_BUNDLE_ID_PREFIX).wallet";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0CFA7E46240DB9DD35FED93D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ValidatopiaWallet/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Validatopia Wallet";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Validatopia Wallet uses Bluetooth to send your Photo ID to a verifier's phone, only after you agree.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID confirms it's you before your Photo ID is shared.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Validatopia Wallet connects to a Validatopia issuer on your local network, for development.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(VALIDATOPIA_BUNDLE_ID_PREFIX).wallet";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EE38C7CC29EE386D308972F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(VALIDATOPIA_BUNDLE_ID_PREFIX).wallet.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ValidatopiaWallet;
+			};
+			name = Debug;
+		};
+		BA92983E7F7A57B1FD36E895 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(VALIDATOPIA_BUNDLE_ID_PREFIX).wallet.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ValidatopiaWallet;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4406234D2DAD42D69DD19329 /* Build configuration list for PBXProject "ValidatopiaWallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2ADE52D74BD179EA32F58376 /* Debug */,
+				E717BD8A03E8F2A2DA91933C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F2D9F870C5F32F4A70D8E7D2 /* Build configuration list for PBXNativeTarget "ValidatopiaWallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D7C58280CF45D5BD228BB44F /* Debug */,
+				0CFA7E46240DB9DD35FED93D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EAD6C94ED80A37DCF69ED424 /* Build configuration list for PBXNativeTarget "ValidatopiaWalletUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EE38C7CC29EE386D308972F1 /* Debug */,
+				BA92983E7F7A57B1FD36E895 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A881FC47F36E1D6ED472C9F2 /* Project object */;
+}
