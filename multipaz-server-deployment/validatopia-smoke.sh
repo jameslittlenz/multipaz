@@ -94,6 +94,12 @@ case "$iaca" in
     *) fail "IACA response did not look like a PEM certificate" ;;
 esac
 
+# --- Issuer metadata where wallets look for it (/.well-known/... before the issuer's path) ---
+for doc in openid-credential-issuer oauth-authorization-server; do
+    curl -sf "$BASE_URL/.well-known/$doc/openid4vci" >/dev/null || fail "/.well-known/$doc/openid4vci not served"
+done
+echo "OK: issuer and authorization server metadata"
+
 # --- Each port serves only its own half ---
 status() {
     curl -s -o /dev/null -w '%{http_code}' "$@"
