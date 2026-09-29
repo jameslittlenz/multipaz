@@ -7,8 +7,8 @@ import org.multipaz.idv.backend.PassportIdentityProofing
 import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
 import org.multipaz.idv.backend.face.FakeFaceMatcher
 import org.multipaz.idv.backend.persona.PersonaStore
-import org.multipaz.openid4vci.credential.CredentialFactoryPhotoId
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
+import org.multipaz.openid4vci.credential.ValidatopiaCredentials
 import org.multipaz.openid4vci.idv.IdentityProofing
 import org.multipaz.openid4vci.server.configureRouting
 import org.multipaz.server.common.ServerConfiguration
@@ -33,7 +33,7 @@ private fun ApplicationTestBuilder.startIssuer() {
             )
         )
     ) {
-        val registry = CredentialFactoryRegistry(listOf(CredentialFactoryPhotoId()))
+        val registry = CredentialFactoryRegistry(ValidatopiaCredentials.createFactories())
         registry.initialize()
         add(CredentialFactoryRegistry::class, registry)
         add(

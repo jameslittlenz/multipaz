@@ -31,6 +31,7 @@ dependencies {
 
     testImplementation(project(":multipaz-server"))
     testImplementation(project(":multipaz-doctypes"))
+    testImplementation(project(":multipaz-utopia"))
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.client.core)

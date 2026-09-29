@@ -61,7 +61,7 @@ import org.multipaz.samples.validatopia.wallet.WalletModel
 import kotlin.time.Clock
 
 /**
- * The holder's own view of their Photo ID: a "viewing" display in the sense of the NZ DISTF
+ * The holder's own view of one of their documents: a "viewing" display in the sense of the NZ DISTF
  * "flash pass" guidance. The warning that this screen isn't for sharing stays on screen while the
  * details scroll. Attributes are a plain list, with nothing (age, date of birth) made prominent
  * and no document styling. The portrait isn't on this page; it opens separately on request.
@@ -86,15 +86,17 @@ fun MyDetailsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (documentInfo == null) {
-                Text("This Photo ID is no longer in the wallet.", style = MaterialTheme.typography.bodyLarge)
+                Text("This document is no longer in the wallet.", style = MaterialTheme.typography.bodyLarge)
                 return@Column
             }
             Text(
-                text = "For your own reference. To prove who you are or how old you are, share your Photo ID " +
+                text = "For your own reference. To prove who you are or how old you are, share the document " +
                     "by tapping a reader or showing a code.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            PortraitPlaceholder(onClick = { onViewPortrait(documentId) })
+            if (claimsOf(documentInfo).any { it.isPortrait() }) {
+                PortraitPlaceholder(onClick = { onViewPortrait(documentId) })
+            }
             StatusChip(documentInfo)
             DetailsList(documentInfo)
             OutlinedButton(
@@ -110,7 +112,7 @@ fun MyDetailsScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Remove this Photo ID?") },
+            title = { Text("Remove this document?") },
             text = { Text("It's deleted from this phone. You can get a new one from the issuer at any time.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -143,7 +145,7 @@ fun PortraitScreen(model: WalletModel, documentId: String, onBack: () -> Unit) {
         if (image != null) {
             Image(
                 bitmap = image,
-                contentDescription = "Your Photo ID portrait",
+                contentDescription = "Your portrait",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)),
             )

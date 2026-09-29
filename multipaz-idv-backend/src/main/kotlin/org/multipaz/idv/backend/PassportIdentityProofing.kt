@@ -340,11 +340,23 @@ class PassportIdentityProofing(
                 put("dg1", dg1)
                 put("dg2", dg2)
             }
+            // The other documents issued alongside the Photo ID, from the same proofing.
+            putCborMap("driving_licence") {
+                put("document_number", generateDocumentNumber("VDL"))
+                put("vehicle_category_code", "B")
+            }
+            putCborMap("gym_membership") {
+                put("membership_number", generateMembershipNumber())
+                put("tier", "basic")
+            }
         }
     }
 
-    private fun generateDocumentNumber(): String =
-        "VPI" + Crypto.secureRandom.nextBytes(6).toBase64Url().filter { it.isLetterOrDigit() }.take(8).uppercase()
+    private fun generateDocumentNumber(prefix: String = "VPI"): String =
+        prefix + Crypto.secureRandom.nextBytes(6).toBase64Url().filter { it.isLetterOrDigit() }.take(8).uppercase()
+
+    private fun generateMembershipNumber(): String =
+        (10_000_000 + Crypto.secureRandom.nextInt(90_000_000)).toString()
 
     private fun mrzSexToIsoSex(sex: MrzSex): Int = when (sex) {
         MrzSex.MALE -> 1

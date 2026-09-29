@@ -33,7 +33,7 @@ import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
 import org.multipaz.samples.validatopia.wallet.WalletModel
 
 /**
- * The presenting screen for one Photo ID, following the NZ DISTF "flash pass" guidance: it shows
+ * The presenting screen for one document, following the NZ DISTF "flash pass" guidance: it shows
  * how to share (tap a reader, or show a code), and a card with no identifying information. The
  * holder's own details are a separate viewing screen, clearly marked as not for sharing.
  */
@@ -47,11 +47,11 @@ fun DocumentScreen(
 ) {
     val documentInfos by model.documentModel.documentInfos.collectAsState()
     val documentInfo = documentInfos.firstOrNull { it.document.identifier == documentId }
-    val name = documentInfo?.document?.displayName ?: "Photo ID"
+    val name = documentInfo?.document?.displayName ?: "Document"
 
     ValidatopiaScaffold(title = name, onBack = onBack) {
         if (documentInfo == null) {
-            Text("This Photo ID is no longer in the wallet.", style = MaterialTheme.typography.bodyLarge)
+            Text("This document is no longer in the wallet.", style = MaterialTheme.typography.bodyLarge)
             return@ValidatopiaScaffold
         }
         Column(
@@ -84,7 +84,7 @@ fun DocumentScreen(
         Text(
             text = "Hold the back of your phone near the verifier's NFC reader (you don't need to open the " +
                 "app first), or show them a code to scan. Either way you'll see what's being asked for before " +
-                "anything is shared, and they check your Photo ID with their app. Showing your screen isn't proof.",
+                "anything is shared, and they check your document with their app. Showing your screen isn't proof.",
             style = MaterialTheme.typography.bodyLarge,
         )
         Button(onClick = { onShowQr(documentId) }, modifier = Modifier.fillMaxWidth()) {

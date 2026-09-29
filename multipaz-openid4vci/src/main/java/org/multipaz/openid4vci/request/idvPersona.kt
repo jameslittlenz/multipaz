@@ -6,6 +6,8 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -15,11 +17,13 @@ import org.multipaz.openid4vci.util.validateClientAttestationPoP
 import org.multipaz.rpc.handler.InvalidRequestException
 
 /**
- * `POST /idv/persona`: issues a Photo ID for a dummy test identity, following the same offer path
+ * `POST /idv/persona`: issues credentials for a dummy test identity, following the same offer path
  * as `/idv/evidence`.
  *
  * Request: `{"client_id": "...", "id": "..."}`, with the same attestation headers as `/idv/start`.
- * Response: `{"offer": "..."}`.
+ * Response: `{"offer": "...", "offers": ["...", ...]}`, where `offers` holds one offer per
+ * credential issued after identity proofing (see [createIdvOffers]) and `offer` is the first of
+ * them, the Photo ID.
  */
 suspend fun idvPersona(call: ApplicationCall) {
     val identityProofing = identityProofingOrNotFound(call) ?: return
@@ -36,9 +40,12 @@ suspend fun idvPersona(call: ApplicationCall) {
     val settings = identityProofing.getSettings()
     val offers = createIdvOffers(result, settings.offerTtlSeconds)
     val offer = offers.firstOrNull()
-        ?: throw IllegalStateException("No 'photo_id' scoped credential configuration is registered")
+        ?: throw IllegalStateException("No credential configuration is offered after identity proofing")
     call.respondText(
-        text = buildJsonObject { put("offer", offer) }.toString(),
+        text = buildJsonObject {
+            put("offer", offer)
+            put("offers", buildJsonArray { offers.forEach { add(it) } })
+        }.toString(),
         contentType = ContentType.Application.Json
     )
 }

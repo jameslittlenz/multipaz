@@ -48,7 +48,8 @@ private sealed class PersonasState {
 }
 
 /**
- * Getting a Photo ID. Only the test-identity path exists in this version; "Verify with passport"
+ * Getting a Photo ID, and with it a Driver Licence, Gym Membership and Age Verification. Only the
+ * test-identity path exists in this version; "Verify with passport"
  * (NFC chip read, liveness, face match) arrives in milestone M6 and isn't shown at all until then.
  */
 @Composable
@@ -78,14 +79,7 @@ fun AddPhotoIdScreen(model: WalletModel, onBack: () -> Unit) {
         requestError = null
         coroutineScope.launch {
             try {
-                val offer = model.createIdvClient().requestPersonaOffer(persona.id)
-                if (!model.provisioningModel.isActive) {
-                    model.provisioningModel.launchOpenID4VCIProvisioning(
-                        offerUri = offer,
-                        clientPreferences = model.getClientPreferences(),
-                        backend = model.getBackend(),
-                    )
-                }
+                model.issueDocuments(model.createIdvClient().requestPersonaOffers(persona.id))
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Logger.e(TAG, "Requesting a Photo ID for ${persona.id} failed", e)
@@ -100,7 +94,8 @@ fun AddPhotoIdScreen(model: WalletModel, onBack: () -> Unit) {
         SectionHeading("Use a test identity")
         Text(
             text = "Choose a test identity. The Validatopia issuer creates a Photo ID with that person's " +
-                "details, backed by synthetic passport data.",
+                "details, backed by synthetic passport data, along with a Driver Licence, Gym Membership and " +
+                "Age Verification.",
             style = MaterialTheme.typography.bodyLarge,
         )
 

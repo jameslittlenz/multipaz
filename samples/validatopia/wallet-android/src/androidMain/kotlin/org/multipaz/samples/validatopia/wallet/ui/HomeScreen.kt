@@ -21,7 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -31,10 +33,12 @@ import androidx.compose.ui.unit.dp
 import org.multipaz.compose.document.DocumentInfo
 import org.multipaz.samples.validatopia.shared.ui.PoweredByValid8
 import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
+import org.multipaz.samples.validatopia.shared.wallet.ValidatopiaIssuance
 import org.multipaz.samples.validatopia.wallet.WalletModel
 
 /**
- * The list of Photo IDs.
+ * The wallet's documents: Photo IDs and the Driver Licences, Gym Memberships and Age Verifications
+ * issued with them.
  *
  * This deliberately doesn't use `VerticalCardList`: it labels every card "Card Image" for
  * TalkBack and reorders only by dragging (WCAG 2.2 SC 2.5.7). Each card here is a single labelled
@@ -48,6 +52,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
 ) {
     val documentInfos by model.documentModel.documentInfos.collectAsState()
+    val issuanceState by model.issuance.state.collectAsState()
     ValidatopiaScaffold(
         title = "Validatopia Wallet",
         actions = {
@@ -58,11 +63,12 @@ fun HomeScreen(
     ) {
         if (documentInfos.isEmpty()) {
             Text(
-                text = "You don't have a Photo ID yet.",
+                text = "You don't have any documents yet.",
                 style = MaterialTheme.typography.titleLarge,
             )
             Text(
-                text = "Get one from the Validatopia issuer to prove who you are or how old you are.",
+                text = "Get a Photo ID from the Validatopia issuer to prove who you are or how old you are. It " +
+                    "comes with a Driver Licence, Gym Membership and Age Verification.",
                 style = MaterialTheme.typography.bodyLarge,
             )
             Button(onClick = onAddPhotoId, modifier = Modifier.fillMaxWidth()) {
@@ -70,10 +76,11 @@ fun HomeScreen(
             }
         } else {
             for (documentInfo in documentInfos) {
-                PhotoIdCard(documentInfo = documentInfo, onClick = { onOpenDocument(documentInfo.document.identifier) })
+                DocumentCard(documentInfo = documentInfo, onClick = { onOpenDocument(documentInfo.document.identifier) })
             }
+            IssuanceStatus(issuanceState, onDismiss = model.issuance::dismissFailure)
             Text(
-                text = "To share, open your Photo ID and show its QR code, or hold your phone near the " +
+                text = "To share, open a document and show its QR code, or hold your phone near the " +
                     "verifier's NFC reader.",
                 style = MaterialTheme.typography.bodyLarge,
             )
@@ -85,9 +92,29 @@ fun HomeScreen(
     }
 }
 
+/** Progress, or a failure, in issuing the documents that come with a Photo ID. */
 @Composable
-private fun PhotoIdCard(documentInfo: DocumentInfo, onClick: () -> Unit) {
-    val name = documentInfo.document.displayName ?: "Photo ID"
+private fun IssuanceStatus(state: ValidatopiaIssuance.State, onDismiss: () -> Unit) {
+    when (state) {
+        ValidatopiaIssuance.State.Idle -> {}
+        is ValidatopiaIssuance.State.Issuing -> ProgressRow(
+            if (state.remaining == 1) "Adding 1 more document…" else "Adding ${state.remaining} more documents…"
+        )
+        is ValidatopiaIssuance.State.Failed -> {
+            Text(
+                text = state.message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
+        }
+    }
+}
+
+@Composable
+private fun DocumentCard(documentInfo: DocumentInfo, onClick: () -> Unit) {
+    val name = documentInfo.document.displayName ?: "Document"
     Card(
         onClick = onClick,
         modifier = Modifier
@@ -105,7 +132,7 @@ private fun PhotoIdCard(documentInfo: DocumentInfo, onClick: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
             )
             // The card itself carries no identifying information (NZ DISTF flash pass guidance);
-            // only this caption says whose Photo ID it is.
+            // only this caption says whose document it is.
             Text(
                 text = name,
                 style = MaterialTheme.typography.bodyLarge,

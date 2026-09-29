@@ -7,6 +7,15 @@
   "credential_photo_id": {
     "title": "{core.given_name}'s Photo ID"
   },
+  "credential_validatopia_mdl": {
+    "title": "{core.given_name}'s Driver Licence"
+  },
+  "credential_validatopia_gym_membership": {
+    "title": "{core.given_name}'s Gym Membership"
+  },
+  "credential_validatopia_age_verification": {
+    "title": "{core.given_name}'s Age Verification"
+  },
   "credential_mdl": {
     "title": "{core.given_name}'s driver license",
     "card_art": {

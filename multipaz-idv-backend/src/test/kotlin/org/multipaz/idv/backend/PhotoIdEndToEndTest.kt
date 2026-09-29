@@ -22,6 +22,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -39,6 +40,8 @@ import org.multipaz.crypto.EcPublicKey
 import org.multipaz.crypto.X509Cert
 import org.multipaz.document.DocumentStore
 import org.multipaz.document.buildDocumentStore
+import org.multipaz.documenttype.knowntypes.AgeVerification
+import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
 import org.multipaz.idv.backend.face.FakeFaceMatcher
@@ -48,8 +51,8 @@ import org.multipaz.idv.mrz.Mrz
 import org.multipaz.idv.mrz.MrzSex
 import org.multipaz.idv.synthetic.SyntheticPassportFactory
 import org.multipaz.mdoc.credential.MdocCredential
-import org.multipaz.openid4vci.credential.CredentialFactoryPhotoId
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
+import org.multipaz.openid4vci.credential.ValidatopiaCredentials
 import org.multipaz.openid4vci.idv.IdentityProofing
 import org.multipaz.openid4vci.idv.PassportEvidence
 import org.multipaz.openid4vci.idv.toCbor
@@ -78,6 +81,7 @@ import org.multipaz.server.common.installServerEnvironment
 import org.multipaz.storage.Storage
 import org.multipaz.storage.ephemeral.EphemeralStorage
 import org.multipaz.util.toBase64Url
+import org.multipaz.utopia.knowntypes.Loyalty
 import kotlin.reflect.KClass
 import kotlin.reflect.cast
 import kotlin.time.Clock
@@ -116,7 +120,7 @@ class PhotoIdEndToEndTest {
         secureAreaProvider = SecureAreaProvider<SecureArea>(Dispatchers.Default) { secureArea }
         documentStore = buildDocumentStore(storage, secureAreaRepository) {}
         documentProvisioningHandler = DocumentProvisioningHandler(secureArea, documentStore)
-        credentialFactoryRegistry = CredentialFactoryRegistry(listOf(CredentialFactoryPhotoId()))
+        credentialFactoryRegistry = CredentialFactoryRegistry(ValidatopiaCredentials.createFactories())
         credentialFactoryRegistry.initialize()
     }
 
@@ -175,10 +179,12 @@ class PhotoIdEndToEndTest {
                 setBody(evidence.toCbor())
             }
             Assert.assertEquals(HttpStatusCode.OK, evidenceResponse.status)
-            val offer = jsonOf(evidenceResponse.readRawBytes())["offer"]!!.jsonPrimitive.content
+            val response = jsonOf(evidenceResponse.readRawBytes())
+            val offer = response["offer"]!!.jsonPrimitive.content
 
             val credential = redeemOffer(offer)
             assertPhotoIdCredential(credential, passport.dg1, passport.dg2, passport.sod)
+            assertAdditionalCredentials(response, offer, givenName = "TEST", familyName = "TRAVELLER")
         }
     }
 
@@ -232,13 +238,15 @@ class PhotoIdEndToEndTest {
                 }.toString())
             }
             Assert.assertEquals(HttpStatusCode.OK, personaResponse.status)
-            val offer = jsonOf(personaResponse.readRawBytes())["offer"]!!.jsonPrimitive.content
+            val response = jsonOf(personaResponse.readRawBytes())
+            val offer = response["offer"]!!.jsonPrimitive.content
 
             val credential = redeemOffer(offer)
             Assert.assertTrue(credential is MdocCredential)
             val core = (credential as MdocCredential).issuerNamespaces.data[PhotoID.ISO_23220_2_NAMESPACE]!!
             Assert.assertEquals("Persona", core["given_name"]!!.dataElementValue.asTstr)
             Assert.assertEquals("Validatopia Test Issuance", core["issuing_authority"]!!.dataElementValue.asTstr)
+            assertAdditionalCredentials(response, offer, givenName = "Persona", familyName = "One")
         }
     }
 
@@ -261,7 +269,48 @@ class PhotoIdEndToEndTest {
         return jsonOf(response.readRawBytes())["session_id"]!!.jsonPrimitive.content
     }
 
-    private suspend fun redeemOffer(offer: String): Credential {
+    /**
+     * Checks that [response]'s `offers` start with the Photo ID [photoIdOffer], then redeems and
+     * checks the Driver Licence, Gym Membership and Age Verification offers that follow it. Both
+     * test holders are over 21.
+     */
+    private suspend fun assertAdditionalCredentials(
+        response: JsonObject,
+        photoIdOffer: String,
+        givenName: String,
+        familyName: String,
+    ) {
+        val offers = response["offers"]!!.jsonArray.map { it.jsonPrimitive.content }
+        Assert.assertEquals(4, offers.size)
+        Assert.assertEquals(photoIdOffer, offers[0])
+
+        val mdl = (redeemOffer(offers[1], DrivingLicense.MDL_DOCTYPE) as MdocCredential)
+            .issuerNamespaces.data[DrivingLicense.MDL_NAMESPACE]!!
+        Assert.assertEquals(givenName, mdl["given_name"]!!.dataElementValue.asTstr)
+        Assert.assertEquals(familyName, mdl["family_name"]!!.dataElementValue.asTstr)
+        Assert.assertTrue(mdl["document_number"]!!.dataElementValue.asTstr.startsWith("VDL"))
+        Assert.assertEquals("XV", mdl["issuing_country"]!!.dataElementValue.asTstr)
+        val privilege = mdl["driving_privileges"]!!.dataElementValue.asArray.single()
+        Assert.assertEquals("B", privilege["vehicle_category_code"].asTstr)
+        Assert.assertEquals(Simple.TRUE, mdl["age_over_18"]!!.dataElementValue)
+        Assert.assertEquals(Simple.TRUE, mdl["age_over_21"]!!.dataElementValue)
+        Assert.assertArrayEquals(FAKE_JPEG_BYTES, (mdl["portrait"]!!.dataElementValue as Bstr).value)
+
+        val gym = (redeemOffer(offers[2], Loyalty.LOYALTY_DOCTYPE) as MdocCredential)
+            .issuerNamespaces.data[Loyalty.LOYALTY_NAMESPACE]!!
+        Assert.assertEquals(givenName, gym["given_name"]!!.dataElementValue.asTstr)
+        Assert.assertEquals(familyName, gym["family_name"]!!.dataElementValue.asTstr)
+        Assert.assertTrue(gym["membership_number"]!!.dataElementValue.asTstr.matches(Regex("[0-9]{8}")))
+        Assert.assertEquals("basic", gym["tier"]!!.dataElementValue.asTstr)
+
+        val ageVerification = (redeemOffer(offers[3], AgeVerification.AV_DOCTYPE) as MdocCredential)
+            .issuerNamespaces.data[AgeVerification.AV_NAMESPACE]!!
+        Assert.assertEquals(setOf("age_over_18", "age_over_21"), ageVerification.keys)
+        Assert.assertEquals(Simple.TRUE, ageVerification["age_over_18"]!!.dataElementValue)
+        Assert.assertEquals(Simple.TRUE, ageVerification["age_over_21"]!!.dataElementValue)
+    }
+
+    private suspend fun redeemOffer(offer: String, docType: String = PhotoID.PHOTO_ID_DOCTYPE): Credential {
         val provisioningClient = OpenID4VCI.createClientFromOffer(
             offerUri = offer,
             clientPreferences = testClientPreferences
@@ -274,7 +323,7 @@ class PhotoIdEndToEndTest {
             document = document,
             credentialMetadata = CredentialMetadata(
                 display = Display("test"),
-                format = CredentialFormat.Mdoc(PhotoID.PHOTO_ID_DOCTYPE),
+                format = CredentialFormat.Mdoc(docType),
                 keyBindingType = KeyBindingType.Attestation(Algorithm.ES256),
                 maxBatchSize = 1
             ),

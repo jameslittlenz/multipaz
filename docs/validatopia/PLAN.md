@@ -3,7 +3,7 @@
 ## Context
 
 This is an end-to-end demonstration of digital credentials, branded for **Validatopia**, a fictional country. It has five parts:
-- **Wallet (Android + iOS).** The user scans their e-passport over NFC and completes a liveness check and a server-side face match. They then receive an ISO/IEC 23220-4 **Photo ID** mdoc. The wallet can also issue a Photo ID from dummy test identities.
+- **Wallet (Android + iOS).** The user scans their e-passport over NFC and completes a liveness check and a server-side face match. They then receive an ISO/IEC 23220-4 **Photo ID** mdoc, along with three companion documents issued from the same identity proofing: a **Driver Licence** (ISO 18013-5 mDL), a **Gym Membership** (a multipaz-utopia loyalty card) and an **Age Verification** (`age_over_18` and `age_over_21` only). The wallet can also issue these from dummy test identities.
 - **Issuer backend.** It signs with software keys, runs in a single Docker container and is **publicly reachable**, so it is hardened against misuse.
 - **Admin website.** Admins can view issued credentials, revoke them and change settings such as face-match thresholds.
 - **Verifier (Android + iOS).** It reads credentials in person (ISO 18013-5) and offers several selective-disclosure use cases, including **cross-border travel**.
@@ -116,10 +116,13 @@ Wallet  device attestation → backend-server (ClientRegistration) → wallet at
         POST /idv/evidence (client attestation + PoP, CBOR ≤2 MB)
 Issuer  passive auth (shared multipaz-idv code) → AA verify → expiry → face match (ONNX)
         → SoR data (DG1 claims + DG2 portrait + raw sod/dg1/dg2, AES-GCM at rest)
-        → IssuanceState.systemOfRecordData → generatePreauthorizedOffer (bound, 5 min)
+        → IssuanceState.systemOfRecordData → generatePreauthorizedOffer (bound, 5 min),
+          one offer per companion document too: {"offer": photoId, "offers": [photoId, mDL, gym, age]}
         → discard selfie + embeddings → audit record
-Wallet  ProvisioningModel(offer) → /token /nonce /credential (key attestation required)
+Wallet  ProvisioningModel(offers[0]) → /token /nonce /credential (key attestation required)
         → CredentialFactoryPhotoId.mint() → Photo ID mdoc (Keystore | Secure Enclave)
+        → once issued, ValidatopiaIssuance redeems offers[1..] on a second, headless
+          ProvisioningModel → Driver Licence, Gym Membership, Age Verification mdocs
 Dummy   GET /idv/personas → POST /idv/persona {id} (same auth, admin-toggled) → same offer path
 Verifier QR | NFC engagement → DeviceRequest(use case) → verify issuer (Validatopia IACA)
         → cross-border: passive auth of sod/dg1/dg2 against CSCA list + DG1↔claims check
@@ -196,6 +199,13 @@ On Android and the JVM, BouncyCastle is registered as provider #1 so brainpool w
   - The `datagroups.1` namespace carries `version`, `sod`, `dg1` and `dg2`.
 - Card art in Validatopia branding (`credential_photo_id`).
 
+**Companion documents** (`credential/CredentialFactoryValidatopia*.kt`)
+- Issued from the same identity proofing as the Photo ID, with the same validity period, key attestation requirement and no sample or portrait fallbacks. `ValidatopiaCredentials.createFactories()` lists all four factories, Photo ID first; each sets `offeredAfterIdentityProofing`, and `createIdvOffers()` makes one pre-authorized offer per factory (wallets redeem only the first `credential_configuration_ids` entry of an offer).
+- **Driver Licence** (`validatopia_mdl`, `org.iso.18013.5.1.mDL`): name, birth date, portrait, sex, nationality, `age_over_18`/`age_over_21`, `age_in_years`, `age_birth_year`, `issuing_country` and `un_distinguishing_sign` `"XV"`, a `VDL…` licence number and one class `B` driving privilege.
+- **Gym Membership** (`validatopia_gym_membership`, `org.multipaz.loyalty.1`): name, portrait, an 8-digit membership number, tier `basic`, issue and expiry dates.
+- **Age Verification** (`validatopia_age_verification`, `eu.europa.ec.av.1`): `age_over_18` and `age_over_21` only.
+- Identity proofing adds `driving_licence` (licence number, vehicle category) and `gym_membership` (membership number, tier) to the system-of-record data. Titles come from `credential_validatopia_mdl`, `credential_validatopia_gym_membership` and `credential_validatopia_age_verification`.
+
 **Hook in `IssuanceState` and `readSystemOfRecord()`**
 - Add `systemOfRecordData: ByteString?` to `IssuanceState`, stored AES-GCM-encrypted with a server key held in the software secure area.
 - Purged by a retention job, and on revocation.
@@ -205,7 +215,7 @@ On Android and the JVM, BouncyCastle is registered as provider #1 so brainpool w
 - They return 404 when IDV is disabled.
 
 **`Main.kt` in the Validatopia profile**
-- Registers **only** `CredentialFactoryPhotoId`. Utopia and PID factories are left out, since several of them don't require key attestation.
+- Registers **only** the Validatopia factories (`ValidatopiaCredentials.createFactories()`: Photo ID and its companion documents). The demo Utopia, PID and mDL factories are left out, since several of them don't require key attestation or fall back to sample data.
 
 **Admin API:** replace `adminCookie.kt`; extend the list, session and status endpoints; add settings, personas, CSCA, audit and portrait-reveal endpoints.
 
@@ -266,6 +276,7 @@ Extends the existing plain HTML/JS in `multipaz-openid4vci/src/main/resources/re
 
 **Branding and design**
 - **Validatopia design tokens:** a primary colour and tonal palette, typography scale, logo and credential card art. Colour pairs are checked for contrast (4.5:1 for text, 3:1 for UI).
+- **Card art** is drawn on the device from `ValidatopiaCardArt`: one design (three rolling hills, the nearest opaque under the white "Powered by" credit) with a colour pairing per document type: Photo ID navy background with teal hills, Driver Licence teal with navy, Gym Membership white with teal, Age Verification white with navy. The title always names the type, so colour is never the only cue.
 - **Android:** Material 3 components; dynamic colour is off to keep the branding.
 - **iOS:** NavigationStack, SF Symbols, system materials.
 
@@ -348,7 +359,7 @@ Extends the existing plain HTML/JS in `multipaz-openid4vci/src/main/resources/re
 
 **End-to-end: `PhotoIdEndToEndTest.kt`**
 - Harness based on `ProvisioningClientTest`.
-- Evidence and persona paths → offer → OpenID4VCI → `DocumentStore`.
+- Evidence and persona paths → offers → OpenID4VCI → `DocumentStore`, for the Photo ID and each companion document.
 - Loopback presentment for each use case, 1–5, asserting that the disclosed elements are **exactly** the requested ones.
 - The cross-border case also passes passive auth on the verifier side.
 
@@ -387,7 +398,7 @@ The iOS builds and tests need macOS with Xcode. This Linux environment can't com
 2. Create an admin and set up TOTP.
 3. Upload the personas.
 4. Fetch the IACA in the verifier.
-5. On the wallet, issue a Photo ID through the passport path and through the persona path, on both platforms.
+5. On the wallet, issue a Photo ID (and its companion Driver Licence, Gym Membership and Age Verification) through the passport path and through the persona path, on both platforms.
 6. Run use cases 1–5 across each combination: Android↔Android, iOS↔iOS and mixed.
 7. Revoke a credential in the admin site and show the verifier flags it.
 

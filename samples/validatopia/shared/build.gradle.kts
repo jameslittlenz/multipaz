@@ -68,7 +68,8 @@ kotlin {
             export(project(":multipaz"))
             export(project(":multipaz-doctypes"))
             export(project(":multipaz-idv"))
-            // multipaz-swiftui's consent sheet renders multipaz-utopia's test "ping" transaction.
+            // The Gym Membership is a multipaz-utopia loyalty card, and multipaz-swiftui's consent
+            // sheet renders multipaz-utopia's test "ping" transaction.
             export(project(":multipaz-utopia"))
             export(libs.kotlinx.io.bytestring)
             export(libs.kotlinx.io.core)
@@ -98,6 +99,8 @@ kotlin {
                 api(project(":multipaz"))
                 api(project(":multipaz-doctypes"))
                 api(project(":multipaz-idv"))
+                // The Gym Membership is a multipaz-utopia loyalty card.
+                api(project(":multipaz-utopia"))
                 api(libs.kotlinx.coroutines.core)
                 api(libs.kotlinx.datetime)
                 api(libs.kotlinx.io.bytestring)
@@ -109,7 +112,6 @@ kotlin {
 
         val iosMain by getting {
             dependencies {
-                api(project(":multipaz-utopia"))
                 api(libs.ktor.client.darwin)
             }
         }

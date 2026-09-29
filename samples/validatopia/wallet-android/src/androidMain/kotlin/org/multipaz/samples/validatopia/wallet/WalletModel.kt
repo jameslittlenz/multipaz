@@ -4,9 +4,13 @@ import android.app.KeyguardManager
 import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.bytestring.decodeToString
@@ -24,6 +28,7 @@ import org.multipaz.provisioning.openid4vci.OpenID4VCIBackend
 import org.multipaz.provisioning.openid4vci.OpenID4VCIClientPreferences
 import org.multipaz.samples.validatopia.shared.idv.DevWalletBackend
 import org.multipaz.samples.validatopia.shared.idv.IdvClient
+import org.multipaz.samples.validatopia.shared.wallet.ValidatopiaIssuance
 import org.multipaz.samples.validatopia.shared.wallet.ValidatopiaWallet
 import org.multipaz.securearea.SecureArea
 import org.multipaz.securearea.SecureAreaRepository
@@ -44,6 +49,7 @@ class WalletModel private constructor(
     val documentModel: DocumentModel,
     val presentmentSource: PresentmentSource,
     val provisioningModel: ProvisioningModel,
+    val issuance: ValidatopiaIssuance,
     val promptModel: PromptModel,
     private val settingsTable: StorageTable,
     issuerUrl: String,
@@ -53,6 +59,10 @@ class WalletModel private constructor(
     private val mutableConsentAccepted = MutableStateFlow(consentAccepted)
     private val backendLock = Mutex()
     private var backend: Pair<String, OpenID4VCIBackend>? = null
+
+    // Outlives any screen: the documents that come with a Photo ID keep being issued after the
+    // wallet has moved on to show the Photo ID.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** The Validatopia issuer's base URL. */
     val issuerUrl: StateFlow<String> = mutableIssuerUrl.asStateFlow()
@@ -94,6 +104,27 @@ class WalletModel private constructor(
     /** OpenID4VCI client preferences for redeeming the issuer's offers. */
     suspend fun getClientPreferences(): OpenID4VCIClientPreferences =
         ValidatopiaWallet.clientPreferences(getBackend())
+
+    /**
+     * Redeems [offers] from identity proofing: the first, the Photo ID, on [provisioningModel],
+     * which the provisioning sheet follows; then the rest in the background with [issuance] once
+     * the Photo ID is issued.
+     */
+    suspend fun issueDocuments(offers: List<String>) {
+        if (provisioningModel.isActive) {
+            return
+        }
+        val clientPreferences = getClientPreferences()
+        val backend = getBackend()
+        val photoId = provisioningModel.launchOpenID4VCIProvisioning(
+            offerUri = offers.first(),
+            clientPreferences = clientPreferences,
+            backend = backend,
+        )
+        scope.launch {
+            issuance.issueAfterPhotoId(photoId, offers.drop(1), clientPreferences, backend)
+        }
+    }
 
     /** A client for the issuer's identity-proofing endpoints. */
     suspend fun createIdvClient(): IdvClient = IdvClient(
@@ -137,7 +168,7 @@ class WalletModel private constructor(
             // (an emulator usually has none), so only ask for them when there is one.
             val deviceSecure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
             val promptModel = AndroidPromptModel.Builder().apply { addCommonDialogs() }.build()
-            val provisioningModel = ProvisioningModel(
+            fun createProvisioningModel() = ProvisioningModel(
                 documentProvisioningHandler = DocumentProvisioningHandler(
                     secureArea = secureArea,
                     documentStore = documentStore,
@@ -157,7 +188,8 @@ class WalletModel private constructor(
                 documentTypeRepository = documentTypeRepository,
                 documentModel = DocumentModel.create(documentStore, documentTypeRepository),
                 presentmentSource = presentmentSource,
-                provisioningModel = provisioningModel,
+                provisioningModel = createProvisioningModel(),
+                issuance = ValidatopiaIssuance(createProvisioningModel()),
                 promptModel = promptModel,
                 settingsTable = settingsTable,
                 issuerUrl = settingsTable.get(KEY_ISSUER_URL)?.decodeToString() ?: BuildConfig.DEFAULT_ISSUER_URL,

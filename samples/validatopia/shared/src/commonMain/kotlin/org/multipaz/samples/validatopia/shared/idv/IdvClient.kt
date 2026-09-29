@@ -107,13 +107,15 @@ class IdvClient(
 
     /**
      * Asks the issuer to proof [personaId] and returns the resulting OpenID4VCI credential offer
-     * URI, single-use and short-lived, to be redeemed with the provisioning client.
+     * URIs, single-use and short-lived, to be redeemed with the provisioning client. There's one
+     * offer per document: the Photo ID first, then the documents issued alongside it (Driver
+     * Licence, Gym Membership and Age Verification).
      *
      * @throws IdvUnavailableException if the issuer has test identities switched off.
      * @throws IdvException on any other error.
      */
     @Throws(IdvException::class, CancellationException::class)
-    suspend fun requestPersonaOffer(personaId: String): String {
+    suspend fun requestPersonaOffers(personaId: String): List<String> {
         val clientId = backend.getClientId()
         val response = withClientAttestation { attestation, pop ->
             httpClient.post("$issuerUrl/idv/persona") {
@@ -130,7 +132,9 @@ class IdvClient(
         }
         val body = checkedBody(response)
         return try {
-            Json.parseToJsonElement(body).jsonObject.string("offer")
+            val json = Json.parseToJsonElement(body).jsonObject
+            // Issuers from before the other documents only return the Photo ID's `offer`.
+            json["offers"]?.jsonArray?.map { it.jsonPrimitive.content } ?: listOf(json.string("offer"))
         } catch (e: IllegalArgumentException) {
             throw IdvException("Malformed offer response from the issuer", e)
         }

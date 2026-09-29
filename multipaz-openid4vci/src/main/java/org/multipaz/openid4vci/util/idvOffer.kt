@@ -2,6 +2,7 @@ package org.multipaz.openid4vci.util
 
 import kotlinx.io.bytestring.ByteString
 import org.multipaz.cbor.Cbor
+import org.multipaz.openid4vci.credential.CredentialFactory
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
 import org.multipaz.openid4vci.idv.IdvResult
 import org.multipaz.rpc.backend.BackendEnvironment
@@ -12,9 +13,11 @@ import kotlin.time.Duration.Companion.seconds
 private const val IDV_OFFER_URL_SCHEMA = "haip-vci"
 
 /**
- * Creates a pre-authorized offer for every registered credential configuration whose scope is
- * `"photo_id"`, carrying [result]'s already-verified system-of-record data (encrypted at rest via
- * [SimpleCipher], per `IssuanceState.systemOfRecordData`).
+ * Creates a pre-authorized offer for every registered credential configuration that is
+ * [CredentialFactory.offeredAfterIdentityProofing], in registration order, each carrying
+ * [result]'s already-verified system-of-record data (encrypted at rest via [SimpleCipher], per
+ * `IssuanceState.systemOfRecordData`). Each offer names a single configuration, since wallets
+ * redeem only the first `credential_configuration_ids` entry of an offer.
  *
  * As with the generic `preauthorizedOffer()` flow, `clientId` and `clientAttestationKey` are left
  * unset here and are captured from the first `/token` redemption instead (see the
@@ -36,7 +39,7 @@ suspend fun createIdvOffers(
     val expiresIn = offerTtlSeconds.seconds
     val offers = mutableListOf<String>()
     for ((configId, factory) in registry.byId) {
-        if (factory.scope != "photo_id") {
+        if (!factory.offeredAfterIdentityProofing) {
             continue
         }
         val state = IssuanceState(

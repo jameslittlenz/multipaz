@@ -1,6 +1,14 @@
 package org.multipaz.samples.validatopia.shared
 
 import io.ktor.client.HttpClient
+import kotlin.reflect.KClass
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.multipaz.cbor.Cbor
@@ -12,8 +20,11 @@ import org.multipaz.crypto.Algorithm
 import org.multipaz.document.DocumentStore
 import org.multipaz.document.buildDocumentStore
 import org.multipaz.documenttype.DocumentTypeRepository
+import org.multipaz.documenttype.knowntypes.AgeVerification
+import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.idv.pa.CscaStore
+import org.multipaz.mdoc.credential.MdocCredential
 import org.multipaz.mdoc.request.DeviceRequest
 import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.presentment.SimplePresentmentSource
@@ -52,14 +63,7 @@ import org.multipaz.securearea.SecureAreaRepository
 import org.multipaz.securearea.software.SoftwareSecureArea
 import org.multipaz.storage.ephemeral.EphemeralStorage
 import org.multipaz.trustmanagement.TrustManagerInterface
-import kotlin.reflect.KClass
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import org.multipaz.utopia.knowntypes.Loyalty
 
 /**
  * The whole persona-path demo: the real Validatopia issuer (with the fixed TEST keys from
@@ -84,12 +88,26 @@ class ValidatopiaRoundTripTest {
         val idvClient = IdvClient(issuerUrl, httpClient, DevWalletBackend.create(), secureArea)
         val personas = idvClient.listPersonas()
         assertEquals(listOf("p1", "p2"), personas.map { it.id })
-        val offer = idvClient.requestPersonaOffer("p1")
+        val offers = idvClient.requestPersonaOffers("p1")
 
-        // Wallet: redeem the offer over OpenID4VCI.
+        // Wallet: redeem every offer over OpenID4VCI: the Photo ID, then the Driver Licence, Gym
+        // Membership and Age Verification issued alongside it.
+        val docTypes = listOf(
+            PhotoID.PHOTO_ID_DOCTYPE,
+            DrivingLicense.MDL_DOCTYPE,
+            Loyalty.LOYALTY_DOCTYPE,
+            AgeVerification.AV_DOCTYPE,
+        )
+        assertEquals(docTypes.size, offers.size)
         withContext(WalletEnvironment(httpClient, secureArea)) {
-            redeemOffer(offer, issuerUrl, documentStore, secureArea)
+            for ((offer, docType) in offers.zip(docTypes)) {
+                redeemOffer(offer, docType, issuerUrl, documentStore, secureArea)
+            }
         }
+        val issued = documentStore.listDocuments().map { document ->
+            (document.getCertifiedCredentials().single() as MdocCredential).docType
+        }
+        assertEquals(docTypes.toSet(), issued.toSet())
 
         // Wallet: its presentment source trusts the bundled Validatopia reader root.
         val readerTrustManager = ValidatopiaTrust.createReaderTrustManager()
@@ -127,9 +145,11 @@ class ValidatopiaRoundTripTest {
         val storage = EphemeralStorage()
         val secureArea = SoftwareSecureArea.create(storage)
         val documentStore = buildDocumentStore(storage, SecureAreaRepository.Builder().add(secureArea).build()) {}
-        val offer = IdvClient(issuerUrl, httpClient, DevWalletBackend.create(), secureArea).requestPersonaOffer("p2")
+        val offer = IdvClient(issuerUrl, httpClient, DevWalletBackend.create(), secureArea)
+            .requestPersonaOffers("p2")
+            .first()
         withContext(WalletEnvironment(httpClient, secureArea)) {
-            redeemOffer(offer, issuerUrl, documentStore, secureArea)
+            redeemOffer(offer, PhotoID.PHOTO_ID_DOCTYPE, issuerUrl, documentStore, secureArea)
         }
         val presentmentSource = SimplePresentmentSource(
             documentStore = documentStore,
@@ -159,6 +179,7 @@ class ValidatopiaRoundTripTest {
 
     private suspend fun redeemOffer(
         offer: String,
+        docType: String,
         issuerUrl: String,
         documentStore: DocumentStore,
         secureArea: SecureArea,
@@ -174,8 +195,8 @@ class ValidatopiaRoundTripTest {
         val credentials = handler.getPendingKeyBoundCredentials(
             document = documentStore.createDocument(),
             credentialMetadata = CredentialMetadata(
-                display = Display("Validatopia Photo ID"),
-                format = CredentialFormat.Mdoc(PhotoID.PHOTO_ID_DOCTYPE),
+                display = Display("Validatopia"),
+                format = CredentialFormat.Mdoc(docType),
                 keyBindingType = KeyBindingType.Attestation(Algorithm.ES256),
                 maxBatchSize = 1,
             ),

@@ -27,7 +27,9 @@ private const val MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
  * Request body: CBOR-encoded [PassportEvidence] (binary, not JSON), with `OAuth-Client-Attestation`
  * /`-PoP` headers for the same client that started the session in `/idv/start`.
  *
- * Response on success: `{"offer": "...", "flags": [...]}`. Response on rejection (HTTP 400):
+ * Response on success: `{"offer": "...", "offers": ["...", ...], "flags": [...]}`, where `offers`
+ * holds one offer per credential issued after identity proofing (see [createIdvOffers]) and
+ * `offer` is the first of them, the Photo ID. Response on rejection (HTTP 400):
  * `{"error": "idv_rejected", "flags": [...]}`. The session is single-use either way.
  */
 suspend fun idvEvidence(call: ApplicationCall) {
@@ -63,10 +65,11 @@ suspend fun idvEvidence(call: ApplicationCall) {
     val settings = identityProofing.getSettings()
     val offers = createIdvOffers(result, settings.offerTtlSeconds)
     val offer = offers.firstOrNull()
-        ?: throw IllegalStateException("No 'photo_id' scoped credential configuration is registered")
+        ?: throw IllegalStateException("No credential configuration is offered after identity proofing")
     call.respondText(
         text = buildJsonObject {
             put("offer", offer)
+            put("offers", buildJsonArray { offers.forEach { add(it) } })
             put("flags", buildJsonArray { result.flags.forEach { add(it) } })
         }.toString(),
         contentType = ContentType.Application.Json

@@ -3,7 +3,7 @@ import LocalAuthentication
 import Observation
 import UIKit
 
-/// The wallet's long-lived state: storage, the Photo IDs, presentment and provisioning.
+/// The wallet's long-lived state: storage, the documents, presentment and provisioning.
 @MainActor
 @Observable
 final class WalletModel {
@@ -25,13 +25,17 @@ final class WalletModel {
         didSet { UserDefaults.standard.set(issuerUrl, forKey: Keys.issuerUrl) }
     }
 
-    /// The identifier of the Photo ID most recently added to the wallet, to open once issued.
+    /// The identifier of the document most recently added to the wallet, to open once issued.
     private(set) var lastAddedDocumentId: String?
+
+    /// Progress in issuing the documents that come with a Photo ID.
+    private(set) var issuanceState: ValidatopiaIssuance.State = ValidatopiaIssuance.StateIdle.shared
 
     private(set) var documentStore: DocumentStore!
     private(set) var documentModel: DocumentModel!
     private(set) var presentmentSource: PresentmentSource!
     private(set) var provisioningModel: ProvisioningModel!
+    private(set) var issuance: ValidatopiaIssuance!
     let promptModel = Platform.shared.promptModel
 
     private var storage: Storage!
@@ -84,27 +88,35 @@ final class WalletModel {
                 documentTypeRepository: documentTypeRepository,
                 readerTrustManager: ValidatopiaTrust.shared.createReaderTrustManager()
             )
-            let selectedSecureArea = secureArea!
-            provisioningModel = ProvisioningModel(
-                documentProvisioningHandler: DocumentProvisioningHandler.companion.create(
-                    secureArea: selectedSecureArea,
-                    documentStore: documentStore,
-                    defaultDocumentProvisioningSettings: ValidatopiaWallet.shared.provisioningSettings(
-                        deviceSecure: Self.deviceHasPasscode
-                    ),
-                    selectSecureAreaFn: { _, suggestedCreateKeySettings in
-                        SelectedSecureArea(secureArea: selectedSecureArea, createKeySettings: suggestedCreateKeySettings)
-                    }
-                ),
-                httpClient: httpClient,
-                promptModel: promptModel,
-                authorizationSecureArea: selectedSecureArea,
-                eventLogger: nil
-            )
+            provisioningModel = createProvisioningModel()
+            // The documents that come with a Photo ID are redeemed on a second model that no UI
+            // follows (see ValidatopiaIssuance).
+            issuance = ValidatopiaIssuance(backgroundProvisioningModel: createProvisioningModel())
+            watchIssuance()
             loadState = .ready
         } catch {
             loadState = .failed(error.userMessage)
         }
+    }
+
+    private func createProvisioningModel() -> ProvisioningModel {
+        let selectedSecureArea = secureArea!
+        return ProvisioningModel(
+            documentProvisioningHandler: DocumentProvisioningHandler.companion.create(
+                secureArea: selectedSecureArea,
+                documentStore: documentStore,
+                defaultDocumentProvisioningSettings: ValidatopiaWallet.shared.provisioningSettings(
+                    deviceSecure: Self.deviceHasPasscode
+                ),
+                selectSecureAreaFn: { _, suggestedCreateKeySettings in
+                    SelectedSecureArea(secureArea: selectedSecureArea, createKeySettings: suggestedCreateKeySettings)
+                }
+            ),
+            httpClient: httpClient,
+            promptModel: promptModel,
+            authorizationSecureArea: selectedSecureArea,
+            eventLogger: nil
+        )
     }
 
     /// The wallet back-end that signs wallet and key attestations for [issuerUrl].
@@ -136,18 +148,37 @@ final class WalletModel {
         )
     }
 
-    /// Asks the issuer to proof [persona] and starts redeeming the resulting offer.
+    /// Asks the issuer to proof [persona] and starts redeeming the resulting offers: the Photo ID
+    /// on [provisioningModel], which the provisioning sheet follows, then the documents that come
+    /// with it in the background once the Photo ID is issued.
     func requestPhotoId(for persona: Persona) async throws {
-        let offer = try await idvClient().requestPersonaOffer(personaId: persona.id)
+        let offers = try await idvClient().requestPersonaOffers(personaId: persona.id)
         let backend = try await getBackend()
         let clientPreferences = try await ValidatopiaWallet.shared.clientPreferences(backend: backend)
-        if !provisioningModel.isActive {
-            provisioningModel.launchOpenID4VCIProvisioning(
-                offerUri: offer,
+        guard !provisioningModel.isActive, let photoIdOffer = offers.first else { return }
+        let photoId = provisioningModel.launchOpenID4VCIProvisioning(
+            offerUri: photoIdOffer,
+            clientPreferences: clientPreferences,
+            backend: backend,
+            appData: nil
+        )
+        let issuance = issuance!
+        Task {
+            try? await issuance.issueAfterPhotoId(
+                photoId: photoId,
+                offers: Array(offers.dropFirst()),
                 clientPreferences: clientPreferences,
-                backend: backend,
-                appData: nil
+                backend: backend
             )
+        }
+    }
+
+    private func watchIssuance() {
+        let issuance = issuance!
+        Task { [weak self] in
+            for await state in issuance.state {
+                self?.issuanceState = state
+            }
         }
     }
 
@@ -162,7 +193,8 @@ final class WalletModel {
 
     // The issuer supplies no card art, and multipaz-swiftui's fallback art shows the holder's name,
     // which the DISTF flash pass guidance rules out wherever a credential is presented (including
-    // the consent sheet). Every Photo ID gets Validatopia's own, non-identifying art instead.
+    // the consent sheet). Every document gets Validatopia's own, non-identifying art instead, in its
+    // type's colors, and documents from before the per-type colors are brought up to date.
     private func applyCardArtToExistingDocuments() async throws {
         for document in try await documentStore.listDocuments(sort: false) {
             try await applyCardArt(to: document)
@@ -185,8 +217,11 @@ final class WalletModel {
     }
 
     private func applyCardArt(to document: Document) async throws {
-        guard document.cardArt == nil else { return }
-        let art = PhotoIdCardArt.image.pngData()!.toByteString()
+        // A new document has no credentials, so no type, until provisioning creates them.
+        let style = try await ValidatopiaCardArt.shared.styleFor(document: document)
+        guard style != ValidatopiaCardArt.shared.unknown else { return }
+        let art = DocumentCardArt.png(for: style)
+        guard document.cardArt != art else { return }
         try await document.edit { editor in
             editor.cardArt = art
         }

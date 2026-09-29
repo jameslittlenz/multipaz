@@ -7,8 +7,8 @@ import org.multipaz.idv.backend.persona.PersonaStore
 import org.multipaz.idv.backend.persona.PersonaStoreException
 import org.multipaz.idv.backend.persona.PersonaStorePersistence
 import org.multipaz.openid4vci.admin.AdminAuth
-import org.multipaz.openid4vci.credential.CredentialFactoryPhotoId
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
+import org.multipaz.openid4vci.credential.ValidatopiaCredentials
 import org.multipaz.openid4vci.idv.IdentityProofing
 import org.multipaz.rpc.backend.BackendEnvironment
 import org.multipaz.rpc.backend.Configuration
@@ -30,10 +30,11 @@ import java.io.File
  * [Main]; a `-param main_class=...` program argument, as this doc comment previously suggested,
  * doesn't do anything — `ServerConfiguration` never reads such a key.)
  *
- * Registers only [CredentialFactoryPhotoId] (no PID/mDL/Utopia factories, since several of them
- * don't require key attestation) and wires up [IdentityProofing] with [FakeFaceMatcher] — the
- * real ONNX-based face matcher and its model-download pipeline are deferred (see
- * `docs/validatopia/PLAN.md`'s Component C).
+ * Registers only [ValidatopiaCredentials]' factories (the Photo ID, plus the Driver Licence, Gym
+ * Membership and Age Verification issued from the same identity proofing; not the demo
+ * PID/mDL/Utopia factories, since several of them don't require key attestation) and wires up
+ * [IdentityProofing] with [FakeFaceMatcher] — the real ONNX-based face matcher and its
+ * model-download pipeline are deferred (see `docs/validatopia/PLAN.md`'s Component C).
  *
  * Personas are loaded from [PersonaStorePersistence] (populated by an admin upload, or by
  * [seedPersonasIfNeeded] from `personas_seed_dir` on first boot — see `start-servers.sh`, which
@@ -61,7 +62,7 @@ class MainValidatopia {
                     seedPersonasIfNeeded(configuration)
 
                     val credentialFactoryRegistry = CredentialFactoryRegistry(
-                        listOf(CredentialFactoryPhotoId())
+                        ValidatopiaCredentials.createFactories()
                     )
                     credentialFactoryRegistry.initialize()
                     add(CredentialFactoryRegistry::class, credentialFactoryRegistry)

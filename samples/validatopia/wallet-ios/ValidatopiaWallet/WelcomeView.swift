@@ -9,7 +9,7 @@ struct WelcomeView: View {
     var body: some View {
         ValidatopiaScreen {
             ValidatopiaBrandHeader(appName: "Wallet")
-            Text("Validatopia Wallet is a demonstration wallet for the fictional country of Validatopia. It holds a Validatopia Photo ID, a digital identity document you can show to shops, hotels and border officers.")
+            Text("Validatopia Wallet is a demonstration wallet for the fictional country of Validatopia. It holds a Validatopia Photo ID, a digital identity document you can show to shops, hotels and border officers, along with the Driver Licence, Gym Membership and Age Verification issued with it.")
 
             SectionHeading("Test identities only")
             Text("In this version you get a Photo ID for a test identity chosen from a list. No real person's data is used, and your camera, face and passport aren't involved.")

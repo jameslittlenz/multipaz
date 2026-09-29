@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The presenting screen for one Photo ID, following the NZ DISTF "flash pass" guidance: how to
+/// The presenting screen for one document, following the NZ DISTF "flash pass" guidance: how to
 /// share, and a card with no identifying information. The holder's own details are a separate
 /// viewing screen, clearly marked as not for sharing. iOS apps can't present over NFC, so the only
 /// way to share here is a code for the verifier to scan (then Bluetooth).
@@ -25,10 +25,10 @@ struct DocumentView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isHeader)
 
-                PhotoIdCard(documentInfo: documentInfo)
+                DocumentCard(documentInfo: documentInfo)
                     .accessibilityElement(children: .combine)
 
-                Text("Show the verifier a code to scan with their Validatopia Verify app. You'll see what's being asked for before anything is shared, and they check your Photo ID with their app. Showing your screen isn't proof.")
+                Text("Show the verifier a code to scan with their Validatopia Verify app. You'll see what's being asked for before anything is shared, and they check your document with their app. Showing your screen isn't proof.")
 
                 PrimaryButton(title: "Show code", systemImage: "qrcode") {
                     path.append(.present(documentId))
@@ -37,10 +37,10 @@ struct DocumentView: View {
                     path.append(.details(documentId))
                 }
             } else {
-                Text("This Photo ID is no longer in the wallet.")
+                Text("This document is no longer in the wallet.")
             }
         }
-        .navigationTitle(documentInfo?.document.displayName ?? "Photo ID")
+        .navigationTitle(documentInfo?.document.displayName ?? "Document")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

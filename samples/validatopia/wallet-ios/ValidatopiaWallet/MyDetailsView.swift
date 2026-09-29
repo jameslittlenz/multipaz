@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The holder's own view of their Photo ID: a "viewing" display in the sense of the NZ DISTF flash
+/// The holder's own view of one of their documents: a "viewing" display in the sense of the NZ DISTF flash
 /// pass guidance. The warning that this screen isn't for sharing stays pinned while the details
 /// scroll. Attributes are a plain list with nothing (age, date of birth) made prominent and no
 /// document styling. The portrait isn't on this page; it opens separately on request.
@@ -15,9 +15,11 @@ struct MyDetailsView: View {
         let documentInfo = model.documentModel.documentInfos.first { $0.identifier == documentId }
         ValidatopiaScreen {
             if let documentInfo {
-                Text("For your own reference. To prove who you are or how old you are, share your Photo ID by showing its code.")
+                Text("For your own reference. To prove who you are or how old you are, share the document by showing its code.")
                     .font(.subheadline)
-                PortraitPlaceholder { path.append(.portrait(documentId)) }
+                if claimsOf(documentInfo).contains(where: { $0.isPortrait }) {
+                    PortraitPlaceholder { path.append(.portrait(documentId)) }
+                }
                 StatusChip(documentInfo: documentInfo)
                 DetailsList(documentInfo: documentInfo)
                 SecondaryButton(title: "Remove from this phone", role: .destructive) { confirmDelete = true }
@@ -25,13 +27,13 @@ struct MyDetailsView: View {
                     Text("Couldn't remove it: \(deleteError)").foregroundStyle(Brand.error)
                 }
             } else {
-                Text("This Photo ID is no longer in the wallet.")
+                Text("This document is no longer in the wallet.")
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) { NotForSharingBanner() }
         .navigationTitle("My details")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Remove this Photo ID?", isPresented: $confirmDelete, titleVisibility: .visible) {
+        .confirmationDialog("Remove this document?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
                 Task {
                     do {
@@ -62,7 +64,7 @@ struct PortraitView: View {
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .accessibilityLabel("Your Photo ID portrait")
+                    .accessibilityLabel("Your portrait")
             } else {
                 Text("No portrait to show.")
             }
@@ -85,7 +87,7 @@ private struct NotForSharingBanner: View {
         HStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .accessibilityHidden(true)
-            Text("Do not share this screen. It isn't verified, and the information on it can't be relied on.")
+            Text("Do not show this screen. This screen is just for you.")
                 .font(.subheadline.bold())
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -22,7 +22,8 @@ fun WelcomeScreen(onAccept: () -> Unit) {
         Text(
             text = "Validatopia Wallet is a demonstration wallet for the fictional country of Validatopia. " +
                 "It holds a Validatopia Photo ID, a digital identity document you can show to shops, hotels " +
-                "and border officers.",
+                "and border officers, along with the Driver Licence, Gym Membership and Age Verification " +
+                "issued with it.",
             style = MaterialTheme.typography.bodyLarge,
         )
 

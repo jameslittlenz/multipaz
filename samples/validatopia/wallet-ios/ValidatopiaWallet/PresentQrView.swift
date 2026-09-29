@@ -1,7 +1,7 @@
 import CoreBluetooth
 import SwiftUI
 
-/// Presents the Photo ID by QR code: the verifier scans the code, then the two phones connect over
+/// Presents a document by QR code: the verifier scans the code, then the two phones connect over
 /// Bluetooth. The consent sheet names the verifier when its request is signed by a trusted reader
 /// certificate. There's no time limit on any step the holder takes.
 struct PresentQrView: View {
@@ -23,7 +23,7 @@ struct PresentQrView: View {
                     presentment(document)
                 }
             } else {
-                Text("This Photo ID is no longer in the wallet.")
+                Text("This document is no longer in the wallet.")
             }
         }
         .navigationTitle("Share with QR code")
@@ -57,7 +57,7 @@ struct PresentQrView: View {
                         // A light quiet zone keeps it scannable in dark mode too.
                         .padding(16)
                         .background(Color.white)
-                        .accessibilityLabel("QR code for sharing your Photo ID. Show it to the verifier.")
+                        .accessibilityLabel("QR code for sharing your document. Show it to the verifier.")
                     SecondaryButton(title: "Cancel") {
                         reset()
                         dismiss()

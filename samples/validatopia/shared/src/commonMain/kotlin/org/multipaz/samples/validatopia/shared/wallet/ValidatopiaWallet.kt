@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import org.multipaz.crypto.Algorithm
 import org.multipaz.document.DocumentStore
 import org.multipaz.documenttype.DocumentTypeRepository
+import org.multipaz.documenttype.knowntypes.AgeVerification
+import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.presentment.PresentmentSource
 import org.multipaz.presentment.SimplePresentmentSource
@@ -20,6 +22,7 @@ import org.multipaz.samples.validatopia.shared.trust.ValidatopiaTrust
 import org.multipaz.securearea.SecureArea
 import org.multipaz.storage.Storage
 import org.multipaz.trustmanagement.TrustManagerInterface
+import org.multipaz.utopia.knowntypes.Loyalty
 
 /** Wallet set-up shared by Validatopia Wallet on Android and iOS. */
 object ValidatopiaWallet {
@@ -29,9 +32,17 @@ object ValidatopiaWallet {
     /** Credential domain for keys usable without a screen lock, on devices that have none. */
     const val DOMAIN_NO_USER_AUTH = "mdoc_no_user_auth"
 
-    /** The document types the wallet holds: only the Photo ID. */
+    /**
+     * The document types the wallet holds: the Photo ID, and the Driver Licence, Gym Membership
+     * (a loyalty card) and Age Verification issued alongside it.
+     */
     fun createDocumentTypeRepository(): DocumentTypeRepository =
-        DocumentTypeRepository().apply { addDocumentType(PhotoID.getDocumentType()) }
+        DocumentTypeRepository().apply {
+            addDocumentType(PhotoID.getDocumentType())
+            addDocumentType(DrivingLicense.getDocumentType())
+            addDocumentType(Loyalty.getDocumentType())
+            addDocumentType(AgeVerification.getDocumentType())
+        }
 
     /**
      * The presentment source for proximity presentment. The consent prompt names the verifier

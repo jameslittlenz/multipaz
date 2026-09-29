@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Getting a Photo ID. Only the test-identity path exists in this version; "Verify with passport"
+/// Getting a Photo ID, and with it a Driver Licence, Gym Membership and Age Verification. Only
+/// the test-identity path exists in this version; "Verify with passport"
 /// (NFC chip read, liveness, face match) arrives in milestone M6 and isn't shown until then.
 struct AddPhotoIdView: View {
     private enum PersonasState {
@@ -19,7 +20,7 @@ struct AddPhotoIdView: View {
     var body: some View {
         ValidatopiaScreen {
             SectionHeading("Use a test identity")
-            Text("Choose a test identity. The Validatopia issuer creates a Photo ID with that person's details, backed by synthetic passport data.")
+            Text("Choose a test identity. The Validatopia issuer creates a Photo ID with that person's details, backed by synthetic passport data, along with a Driver Licence, Gym Membership and Age Verification.")
 
             switch state {
             case .loading:

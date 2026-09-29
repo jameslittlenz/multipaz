@@ -38,7 +38,7 @@ import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
 import org.multipaz.samples.validatopia.wallet.WalletModel
 
 /**
- * Presents the Photo ID by QR code: the verifier scans the code, then the two phones connect over
+ * Presents a document by QR code: the verifier scans the code, then the two phones connect over
  * Bluetooth. The consent sheet (in `PresentmentActivity`) names the verifier when its request is
  * signed by a trusted reader certificate. There's no time limit on any step.
  */
@@ -52,7 +52,7 @@ fun PresentQrScreen(model: WalletModel, documentId: String, onBack: () -> Unit) 
 
     ValidatopiaScaffold(title = "Share with QR code", onBack = onBack) {
         when {
-            document == null -> Text("This Photo ID is no longer in the wallet.")
+            document == null -> Text("This document is no longer in the wallet.")
             !blePermissionState.isGranted -> {
                 Text(
                     text = "Sharing by QR code uses Bluetooth to connect to the verifier's phone. Allow " +
@@ -101,7 +101,7 @@ fun PresentQrScreen(model: WalletModel, documentId: String, onBack: () -> Unit) 
                         )
                         Image(
                             bitmap = qrCode,
-                            contentDescription = "QR code for sharing your Photo ID. Show it to the verifier.",
+                            contentDescription = "QR code for sharing your document. Show it to the verifier.",
                             contentScale = ContentScale.FillWidth,
                             // A light quiet zone keeps it scannable in dark theme too.
                             modifier = Modifier

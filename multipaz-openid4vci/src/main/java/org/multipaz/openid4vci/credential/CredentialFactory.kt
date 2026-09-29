@@ -38,6 +38,8 @@ import org.multipaz.server.enrollment.getServerIdentityCertified
  * @param name human-readable name for this credential
  * @param logo relative URL for the logo image (normally corresponds to the resource name in
  *  `resources/www`)
+ * @param offeredAfterIdentityProofing if true, a pre-authorized offer for this credential is
+ *  created whenever identity proofing (`/idv/evidence` or `/idv/persona`) succeeds
  */
 interface CredentialFactory {
     val configurationId: String
@@ -51,6 +53,7 @@ interface CredentialFactory {
     val cryptographicBindingMethods: List<String>
     val name: String
     val logo: String?
+    val offeredAfterIdentityProofing: Boolean get() = false
 
     /**
      * [AsymmetricKey] used to sign the new credentials.

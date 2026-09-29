@@ -23,20 +23,17 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
-import org.multipaz.samples.validatopia.shared.branding.ValidatopiaColors
+import org.multipaz.samples.validatopia.shared.branding.CardArtStyle
+import org.multipaz.samples.validatopia.shared.branding.ValidatopiaCardArt
 import org.multipaz.samples.validatopia.shared.R as SharedR
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Validatopia Photo ID card art, drawn on the device because the issuer doesn't supply any.
- *
- * It follows the NZ DISTF "flash pass" guidance
- * (https://github.com/nz-trust-framework/DISTF-reference-architecture/blob/main/guidance/FLASH-PASS.md):
- * the card appears on the presenting screen and in consent sheets, so it shows only the credential
- * type and its provider. It carries no name, portrait or other identifying information, and it
- * avoids anything that resembles a physical document or its security features. The art is a
- * decorative landscape in Validatopia navy and green; white on navy is 17:1, green on navy 7.2:1.
+ * Validatopia card art, drawn on the device because the issuer doesn't supply any: one design for
+ * every document, in the colors [ValidatopiaCardArt] gives its type. See [ValidatopiaCardArt] for
+ * how it follows the NZ DISTF "flash pass" guidance: nothing on it identifies the holder.
  */
-internal class PhotoIdCardArt(private val context: Context) {
+internal class DocumentCardArt(private val context: Context) {
     private val textMeasurer by lazy {
         TextMeasurer(
             defaultFontFamilyResolver = createFontFamilyResolver(context),
@@ -49,14 +46,14 @@ internal class PhotoIdCardArt(private val context: Context) {
         BitmapFactory.decodeResource(context.resources, SharedR.drawable.valid8_advisory_logo_white).asImageBitmap()
     }
 
-    /** The same art for every Photo ID: nothing on it identifies the holder. */
-    val image: ImageBitmap by lazy { render() }
+    private val images = ConcurrentHashMap<CardArtStyle, ImageBitmap>()
 
-    private fun render(): ImageBitmap {
+    /** The art for every document of [style]'s type: nothing on it identifies the holder. */
+    fun image(style: CardArtStyle): ImageBitmap = images.getOrPut(style) { render(style) }
+
+    private fun render(style: CardArtStyle): ImageBitmap {
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
-        val navy = ValidatopiaColors.NAVY.toColor()
-        val green = ValidatopiaColors.GREEN.toColor()
-        val white = Color.White
+        val hills = style.hills.toColor()
         val w = WIDTH.toFloat()
         val h = HEIGHT.toFloat()
 
@@ -66,10 +63,10 @@ internal class PhotoIdCardArt(private val context: Context) {
             canvas = Canvas(bitmap),
             size = Size(w, h),
         ) {
-            drawRect(navy)
+            drawRect(style.background.toColor())
 
-            // Three rolling hills, far to near, in deepening tints of the brand green.
-            for ((index, alpha) in listOf(0.22f, 0.40f, 0.70f).withIndex()) {
+            // Three rolling hills, far to near, the nearest opaque.
+            for ((index, alpha) in ValidatopiaCardArt.hillAlphas.withIndex()) {
                 val top = h * (0.50f + index * 0.12f)
                 val hill = Path().apply {
                     moveTo(0f, top + h * 0.10f)
@@ -78,26 +75,26 @@ internal class PhotoIdCardArt(private val context: Context) {
                     lineTo(0f, h)
                     close()
                 }
-                drawPath(hill, green.copy(alpha = alpha))
+                drawPath(hill, hills.copy(alpha = alpha.toFloat()))
             }
 
             drawText(
                 textMeasurer = textMeasurer,
                 text = buildAnnotatedString {
-                    append("Photo ")
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("ID") }
+                    append(style.titleLead)
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(style.titleEmphasis) }
                 },
                 topLeft = Offset(56f, 52f),
-                style = TextStyle(fontSize = 60.sp, color = white),
+                style = TextStyle(fontSize = 60.sp, color = style.title.toColor()),
             )
             drawText(
                 textMeasurer = textMeasurer,
                 text = "Validatopia",
                 topLeft = Offset(58f, 136f),
-                style = TextStyle(fontSize = 30.sp, color = green, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(fontSize = 30.sp, color = style.subtitle.toColor(), fontWeight = FontWeight.SemiBold),
             )
 
-            // Provider credit, bottom right, on the darkest hill.
+            // Provider credit, bottom right, on the nearest hill.
             val logoWidth = 250f
             val logoHeight = logoWidth * logo.height / logo.width
             val logoTopLeft = Offset(w - logoWidth - 48f, h - logoHeight - 44f)
@@ -105,7 +102,7 @@ internal class PhotoIdCardArt(private val context: Context) {
                 textMeasurer = textMeasurer,
                 text = "Powered by",
                 topLeft = Offset(logoTopLeft.x, logoTopLeft.y - 28f),
-                style = TextStyle(fontSize = 18.sp, color = white),
+                style = TextStyle(fontSize = 18.sp, color = ValidatopiaCardArt.CREDIT.toColor()),
             )
             drawImage(
                 image = logo,
