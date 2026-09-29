@@ -18,7 +18,6 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.samples.validatopia.shared.ui.SectionHeading
 import org.multipaz.samples.validatopia.shared.ui.ValidatopiaBrandHeader
 import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
@@ -49,7 +48,7 @@ fun HomeScreen(onUseCase: (PhotoIdUseCase) -> Unit, onOpenTrust: () -> Unit) {
                     Text(useCase.title, style = MaterialTheme.typography.titleMedium)
                     Text(useCase.purpose, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = "Asks for: " + useCase.requested.joinToString { elementName(it.element.namespace, it.element.identifier) },
+                        text = "Asks for: " + useCase.requested.joinToString { it.element.displayName },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -63,7 +62,7 @@ fun HomeScreen(onUseCase: (PhotoIdUseCase) -> Unit, onOpenTrust: () -> Unit) {
 fun RequestedElementsList(useCase: PhotoIdUseCase) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for (requested in useCase.requested) {
-            val name = elementName(requested.element.namespace, requested.element.identifier)
+            val name = requested.element.displayName
             Text(
                 text = if (requested.intentToRetain) "• $name (kept on file)" else "• $name",
                 style = MaterialTheme.typography.bodyLarge,
@@ -71,10 +70,3 @@ fun RequestedElementsList(useCase: PhotoIdUseCase) {
         }
     }
 }
-
-private val photoIdDocumentType by lazy { PhotoID.getDocumentType() }
-
-/** The Photo ID element's human-readable name. */
-internal fun elementName(namespace: String, identifier: String): String =
-    photoIdDocumentType.mdocDocumentType?.namespaces?.get(namespace)
-        ?.dataElements?.get(identifier)?.attribute?.displayName ?: identifier

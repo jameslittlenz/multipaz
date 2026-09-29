@@ -7,7 +7,14 @@ import org.multipaz.mdoc.request.DeviceRequest
 import org.multipaz.mdoc.request.buildDeviceRequest
 
 /** A single Photo ID data element: namespace plus identifier. */
-data class PhotoIdElement(val namespace: String, val identifier: String)
+data class PhotoIdElement(val namespace: String, val identifier: String) {
+    /** The element's human-readable name from the Photo ID document type, or its identifier. */
+    val displayName: String
+        get() = photoIdDocumentType.mdocDocumentType?.namespaces?.get(namespace)
+            ?.dataElements?.get(identifier)?.attribute?.displayName ?: identifier
+}
+
+private val photoIdDocumentType by lazy { PhotoID.getDocumentType() }
 
 /** A requested element and whether the verifier declares an intent to retain it. */
 data class RequestedElement(val element: PhotoIdElement, val intentToRetain: Boolean)

@@ -1,5 +1,8 @@
 package org.multipaz.samples.validatopia.shared.result
 
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngineFactory
+import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CancellationException
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -21,6 +24,7 @@ import org.multipaz.idv.pa.CscaStore
 import org.multipaz.idv.pa.PassiveAuthenticationFlag
 import org.multipaz.mdoc.response.DeviceResponse
 import org.multipaz.mdoc.response.MdocDocument
+import org.multipaz.revocation.CachingRevocationChecker
 import org.multipaz.revocation.RevocationCheckState
 import org.multipaz.revocation.RevocationChecker
 import org.multipaz.samples.validatopia.shared.crossborder.PassportCheck
@@ -28,7 +32,9 @@ import org.multipaz.samples.validatopia.shared.crossborder.PassportCheckResult
 import org.multipaz.samples.validatopia.shared.crossborder.PhotoIdClaimsForPassportCheck
 import org.multipaz.samples.validatopia.shared.usecase.PhotoIdElement
 import org.multipaz.samples.validatopia.shared.usecase.PhotoIdUseCase
+import org.multipaz.samples.validatopia.shared.trust.ValidatopiaTrust
 import org.multipaz.samples.validatopia.shared.usecase.ValidatopiaPhotoIdProfile
+import org.multipaz.storage.Storage
 import org.multipaz.trustmanagement.TrustManagerInterface
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -53,7 +59,8 @@ class PhotoIdVerifier(
      * Verifies [deviceResponse], which answered a request for [useCase] in the session with
      * [sessionTranscript].
      *
-     * @throws PhotoIdVerificationException if the response doesn't hold a Photo ID at all.
+     * @throws PhotoIdVerificationException if the response doesn't hold a Photo ID at all, or is
+     *   malformed.
      */
     @Throws(PhotoIdVerificationException::class, CancellationException::class)
     suspend fun verify(
@@ -61,6 +68,19 @@ class PhotoIdVerifier(
         deviceResponse: DeviceResponse,
         sessionTranscript: DataItem,
         at: Instant = Clock.System.now(),
+    ): PhotoIdVerification = try {
+        verifyWellFormed(useCase, deviceResponse, sessionTranscript, at)
+    } catch (e: IllegalArgumentException) {
+        // A response from an untrusted wallet can be malformed in ways CBOR and ASN.1 decoding
+        // report like this. From Swift an undeclared exception would be fatal, so say so instead.
+        throw PhotoIdVerificationException("The wallet's response is malformed: ${e.message}", e)
+    }
+
+    private suspend fun verifyWellFormed(
+        useCase: PhotoIdUseCase,
+        deviceResponse: DeviceResponse,
+        sessionTranscript: DataItem,
+        at: Instant,
     ): PhotoIdVerification {
         // DeviceResponse only exposes its documents once verify() has been called, pass or fail.
         val verifyNowError = try {
@@ -366,6 +386,24 @@ class PhotoIdVerifier(
         (document.issuerNamespaces.data[element.namespace]?.get(element.identifier)?.dataElementValue as? Bstr)?.value
 
     companion object {
+        /**
+         * The verifier the Validatopia apps use: the bundled TEST trust anchors, plus a revocation
+         * checker that fetches the credential's status list afresh for every check, so a revocation
+         * made in the admin site shows up straight away.
+         *
+         * @param storage where the revocation checker keeps its cache.
+         * @param httpClientEngine the platform's HTTP engine, for fetching status lists.
+         */
+        fun createValidatopia(storage: Storage, httpClientEngine: HttpClientEngineFactory<*>): PhotoIdVerifier =
+            PhotoIdVerifier(
+                issuerTrustManager = ValidatopiaTrust.createIssuerTrustManager(),
+                cscaStore = ValidatopiaTrust.createCscaStore(),
+                revocationChecker = CachingRevocationChecker(
+                    storage = storage,
+                    httpClient = HttpClient(httpClientEngine) { install(HttpTimeout) },
+                ),
+            )
+
         private val DATAGROUP_SOD = PhotoIdElement(PhotoID.DATAGROUPS_NAMESPACE, "sod")
         private val DATAGROUP_DG1 = PhotoIdElement(PhotoID.DATAGROUPS_NAMESPACE, "dg1")
         private val DATAGROUP_DG2 = PhotoIdElement(PhotoID.DATAGROUPS_NAMESPACE, "dg2")

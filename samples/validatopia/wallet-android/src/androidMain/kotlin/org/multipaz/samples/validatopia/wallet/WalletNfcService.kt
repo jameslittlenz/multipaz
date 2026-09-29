@@ -9,8 +9,8 @@ import org.multipaz.compose.mdoc.MdocNfcV2Service
 import org.multipaz.compose.mdoc.NfcApduService
 import org.multipaz.compose.prompt.PresentmentActivity
 import org.multipaz.crypto.EcCurve
-import org.multipaz.mdoc.transport.MdocTransportOptions
 import org.multipaz.nfc.Nfc
+import org.multipaz.samples.validatopia.shared.transport.ValidatopiaTransport
 
 /**
  * Presents the Photo ID when the phone is tapped on a reader, even if the app isn't open.
@@ -30,8 +30,6 @@ private suspend fun preparePresentment(context: Context) = WalletModel.get(conte
     }
 }
 
-private val TRANSPORT_OPTIONS = MdocTransportOptions(bleUseL2CAP = false, bleUseL2CAPInEngagement = true)
-
 // No preference: take the connection methods in the order the reader offers them.
 private val NEGOTIATED_HANDOVER_ORDER = emptyList<String>()
 
@@ -50,7 +48,7 @@ private class WalletMdocNdefService(
         staticHandoverBleCentralClientModeEnabled = true,
         staticHandoverBlePeripheralServerModeEnabled = false,
         staticHandoverNfcDataTransferEnabled = false,
-        transportOptions = TRANSPORT_OPTIONS,
+        transportOptions = ValidatopiaTransport.options,
     )
 }
 
@@ -66,6 +64,6 @@ private class WalletMdocNfcV2Service(
         sessionEncryptionCurve = EcCurve.P256,
         useNegotiatedHandover = true,
         negotiatedHandoverPreferredOrder = NEGOTIATED_HANDOVER_ORDER,
-        transportOptions = TRANSPORT_OPTIONS,
+        transportOptions = ValidatopiaTransport.options,
     )
 }

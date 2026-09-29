@@ -1,8 +1,6 @@
 package org.multipaz.samples.validatopia.shared
 
 import io.ktor.client.HttpClient
-import io.ktor.server.testing.ApplicationTestBuilder
-import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.multipaz.cbor.Cbor
@@ -15,17 +13,9 @@ import org.multipaz.document.DocumentStore
 import org.multipaz.document.buildDocumentStore
 import org.multipaz.documenttype.DocumentTypeRepository
 import org.multipaz.documenttype.knowntypes.PhotoID
-import org.multipaz.idv.backend.PassportIdentityProofing
-import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
-import org.multipaz.idv.backend.face.FakeFaceMatcher
-import org.multipaz.idv.backend.persona.PersonaStore
 import org.multipaz.idv.pa.CscaStore
 import org.multipaz.mdoc.request.DeviceRequest
 import org.multipaz.mdoc.response.DeviceResponse
-import org.multipaz.openid4vci.credential.CredentialFactoryPhotoId
-import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
-import org.multipaz.openid4vci.idv.IdentityProofing
-import org.multipaz.openid4vci.server.configureRouting
 import org.multipaz.presentment.SimplePresentmentSource
 import org.multipaz.presentment.mdocPresentmentAuthenticateUser
 import org.multipaz.presentment.mdocPresentmentGenerateResponse
@@ -49,6 +39,7 @@ import org.multipaz.rpc.backend.BackendEnvironment
 import org.multipaz.samples.validatopia.shared.idv.DevWalletBackend
 import org.multipaz.samples.validatopia.shared.idv.IdvClient
 import org.multipaz.samples.validatopia.shared.result.CheckOutcome
+import org.multipaz.samples.validatopia.shared.result.ClaimValue
 import org.multipaz.samples.validatopia.shared.result.PhotoIdVerification
 import org.multipaz.samples.validatopia.shared.result.PhotoIdVerifier
 import org.multipaz.samples.validatopia.shared.trust.ValidatopiaTrust
@@ -59,13 +50,9 @@ import org.multipaz.securearea.SecureArea
 import org.multipaz.securearea.SecureAreaProvider
 import org.multipaz.securearea.SecureAreaRepository
 import org.multipaz.securearea.software.SoftwareSecureArea
-import org.multipaz.server.common.ServerConfiguration
-import org.multipaz.server.common.ServerEnvironment
-import org.multipaz.server.common.installServerEnvironment
 import org.multipaz.storage.ephemeral.EphemeralStorage
 import org.multipaz.trustmanagement.TrustManagerInterface
 import kotlin.reflect.KClass
-import kotlin.reflect.cast
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -75,32 +62,33 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The whole persona-path demo, in one process: the real Validatopia issuer (with the fixed TEST
- * keys from `multipaz-server-deployment/validatopia-test-keys/`) proofs a persona for the wallet's
+ * The whole persona-path demo: the real Validatopia issuer (with the fixed TEST keys from
+ * `multipaz-server-deployment/validatopia-test-keys/`) proofs a persona for the wallet's
  * [IdvClient] and [DevWalletBackend], the offer is redeemed over OpenID4VCI into a wallet
  * [DocumentStore], then every use case is presented with the multipaz presentment code and checked
  * with the verifier's [PhotoIdVerifier].
  *
- * Only the radio (QR/BLE or NFC) is missing: the request and response are handed across directly.
+ * The issuer is JVM-only, so [runWithTestIssuer] supplies it per platform: in-process on the JVM,
+ * and on iOS a real `MainValidatopia` that Gradle starts on localhost before the simulator tests
+ * run. Everything on the wallet and verifier side runs on the platform under test. Only the radio
+ * (QR/BLE or NFC) is missing: the request and response are handed across directly.
  */
 class ValidatopiaRoundTripTest {
     @Test
-    fun personaIssuanceThenEveryUseCase() = testApplication {
+    fun personaIssuanceThenEveryUseCase() = runWithTestIssuer { issuerUrl, httpClient ->
         val storage = EphemeralStorage()
         val secureArea = SoftwareSecureArea.create(storage)
         val documentStore = buildDocumentStore(storage, SecureAreaRepository.Builder().add(secureArea).build()) {}
-        startIssuer()
-        val httpClient = createClient { followRedirects = false }
 
         // Wallet: list the test identities and ask for Claudia (NZL passport).
-        val idvClient = IdvClient(ISSUER_URL, httpClient, DevWalletBackend.create(), secureArea)
+        val idvClient = IdvClient(issuerUrl, httpClient, DevWalletBackend.create(), secureArea)
         val personas = idvClient.listPersonas()
         assertEquals(listOf("p1", "p2"), personas.map { it.id })
         val offer = idvClient.requestPersonaOffer("p1")
 
         // Wallet: redeem the offer over OpenID4VCI.
         withContext(WalletEnvironment(httpClient, secureArea)) {
-            redeemOffer(offer, documentStore, secureArea)
+            redeemOffer(offer, issuerUrl, documentStore, secureArea)
         }
 
         // Wallet: its presentment source trusts the bundled Validatopia reader root.
@@ -135,15 +123,13 @@ class ValidatopiaRoundTripTest {
     }
 
     @Test
-    fun untrustedAnchorsAreFlagged() = testApplication {
+    fun untrustedAnchorsAreFlagged() = runWithTestIssuer { issuerUrl, httpClient ->
         val storage = EphemeralStorage()
         val secureArea = SoftwareSecureArea.create(storage)
         val documentStore = buildDocumentStore(storage, SecureAreaRepository.Builder().add(secureArea).build()) {}
-        startIssuer()
-        val httpClient = createClient { followRedirects = false }
-        val offer = IdvClient(ISSUER_URL, httpClient, DevWalletBackend.create(), secureArea).requestPersonaOffer("p2")
+        val offer = IdvClient(issuerUrl, httpClient, DevWalletBackend.create(), secureArea).requestPersonaOffer("p2")
         withContext(WalletEnvironment(httpClient, secureArea)) {
-            redeemOffer(offer, documentStore, secureArea)
+            redeemOffer(offer, issuerUrl, documentStore, secureArea)
         }
         val presentmentSource = SimplePresentmentSource(
             documentStore = documentStore,
@@ -171,35 +157,12 @@ class ValidatopiaRoundTripTest {
         assertTrue(result.passportCheck!!.claimsMatch)
     }
 
-    private fun ApplicationTestBuilder.startIssuer() {
-        val serverEnvironment = ServerEnvironment.create(
-            ServerConfiguration(
-                arrayOf(
-                    "-param", "base_url=$ISSUER_URL",
-                    "-param", "database_engine=ephemeral",
-                    "-config", KEYS_CONFIG,
-                )
-            )
-        ) {
-            val registry = CredentialFactoryRegistry(listOf(CredentialFactoryPhotoId()))
-            registry.initialize()
-            add(CredentialFactoryRegistry::class, registry)
-            add(
-                IdentityProofing::class,
-                PassportIdentityProofing(
-                    faceMatcher = FakeFaceMatcher(),
-                    testCsca = ValidatopiaTestCsca.getOrCreate(),
-                    personaStore = PersonaStore.fromJson(PERSONAS) { FAKE_JPEG },
-                )
-            )
-        }
-        application {
-            installServerEnvironment(serverEnvironment)
-            configureRouting(serverEnvironment)
-        }
-    }
-
-    private suspend fun redeemOffer(offer: String, documentStore: DocumentStore, secureArea: SecureArea) {
+    private suspend fun redeemOffer(
+        offer: String,
+        issuerUrl: String,
+        documentStore: DocumentStore,
+        secureArea: SecureArea,
+    ) {
         val provisioningClient = OpenID4VCI.createClientFromOffer(offer, clientPreferences)
         provisioningClient.getAuthorizationChallenges()
         provisioningClient.getKeyBindingChallenge()
@@ -216,7 +179,7 @@ class ValidatopiaRoundTripTest {
                 keyBindingType = KeyBindingType.Attestation(Algorithm.ES256),
                 maxBatchSize = 1,
             ),
-            issuerMetadata = ProvisioningMetadata(ISSUER_URL, Display("Validatopia"), mapOf()),
+            issuerMetadata = ProvisioningMetadata(issuerUrl, Display("Validatopia"), mapOf()),
             createKeySettings = CreateKeySettings(),
         )
         val credential = credentials.single()
@@ -291,13 +254,14 @@ class ValidatopiaRoundTripTest {
         assertTrue(passportCheck.claimsMatch, "DG1 comparisons: ${passportCheck.comparisons}")
         assertEquals("NZL", passportCheck.mrz!!.issuingState)
         assertTrue(passportCheck.comparisons.all { it.matches == true }, "${passportCheck.comparisons}")
-        assertContentEquals(FAKE_JPEG, passportCheck.faceImage)
+        // The Photo ID's portrait is the passport's DG2 face, byte for byte.
+        val portrait = result.valueOf(PhotoIdElement(PhotoID.ISO_23220_2_NAMESPACE, "portrait"))
+        assertContentEquals((portrait as ClaimValue.Image).bytes, passportCheck.faceImage)
         val passportIssuer = assertNotNull(result.passportIssuer)
         assertTrue(passportIssuer.checks.none { it.outcome == CheckOutcome.FAILED }, "${passportIssuer.checks}")
         assertEquals(CheckOutcome.WARNING, passportIssuer.overall)
         val reveals = assertNotNull(result.dg1Reveals)
         assertEquals("CLAUDIA HILL", reveals.first { it.label == "Full name" }.value)
-        assertTrue(result.valueOf(PhotoIdElement(PhotoID.ISO_23220_2_NAMESPACE, "portrait")) != null)
         // The Photo ID's own (Validatopia) number is never part of the border request.
         assertTrue(result.notShared.any { it.element.identifier == "document_number" })
     }
@@ -317,16 +281,13 @@ class ValidatopiaRoundTripTest {
                 SecureAreaProvider::class -> secureAreaProvider
                 else -> return null
             }
-            return clazz.cast(value)
+            @Suppress("UNCHECKED_CAST")
+            return value as T
         }
     }
 
     companion object {
-        private const val ISSUER_URL = "http://localhost"
         private const val NO_USER_AUTH_DOMAIN = "mdoc_no_user_auth"
-
-        // Tests run with the module directory as the working directory.
-        private const val KEYS_CONFIG = "../../../multipaz-server-deployment/validatopia-test-keys/validatopia-keys.conf"
 
         private val clientPreferences = OpenID4VCIClientPreferences(
             clientId = DevWalletBackend.CLIENT_ID,
@@ -334,20 +295,5 @@ class ValidatopiaRoundTripTest {
             locales = listOf("en-US"),
             signingAlgorithms = listOf(Algorithm.ESP256),
         )
-
-        // Starts with the JPEG magic bytes; nothing here decodes the portrait as an image. Real
-        // portraits run to hundreds of KiB, and anything over 64 KiB needs a three-octet ASN.1
-        // length inside DG2, which the verifier must be able to parse.
-        private val FAKE_JPEG = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()) + ByteArray(100_000) { it.toByte() }
-
-        // Mirrors multipaz-server-deployment/docker/init/personas/personas.json.
-        private val PERSONAS = """
-            [{ "id": "p1", "given_name": "Claudia", "family_name": "Hill", "birth_date": "2002-01-01",
-               "sex": 2, "nationality": "NZL", "document_number": "AA1234567",
-               "expiry_date": "2035-01-01", "portrait": "p1.jpg" },
-             { "id": "p2", "given_name": "Kai", "family_name": "Sorensen", "birth_date": "1988-11-02",
-               "sex": 1, "nationality": "XVA", "document_number": "XVP000002",
-               "expiry_date": "2031-11-02", "portrait": "p2.jpg" }]
-        """.trimIndent()
     }
 }

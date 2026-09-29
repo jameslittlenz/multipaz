@@ -31,19 +31,12 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.io.bytestring.ByteString
-import org.multipaz.cbor.Simple
 import org.multipaz.compose.camera.CameraCaptureResolution
 import org.multipaz.compose.camera.CameraSelection
 import org.multipaz.compose.permissions.rememberBluetoothEnabledState
 import org.multipaz.compose.permissions.rememberBluetoothPermissionState
 import org.multipaz.compose.permissions.rememberCameraPermissionState
 import org.multipaz.compose.qrcode.QrCodeScanner
-import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodBle
-import org.multipaz.mdoc.nfc.MdocHandoverType
-import org.multipaz.mdoc.nfc.MdocReaderNfcHandoverOptions
-import org.multipaz.mdoc.nfc.scanMdocReader
-import org.multipaz.mdoc.transport.MdocTransportOptions
 import org.multipaz.nfc.NfcTagReader
 import org.multipaz.samples.validatopia.shared.reader.PhotoIdReadResult
 import org.multipaz.samples.validatopia.shared.reader.PhotoIdReader
@@ -53,11 +46,10 @@ import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
 import org.multipaz.samples.validatopia.shared.usecase.PhotoIdUseCase
 import org.multipaz.samples.validatopia.verifier.VerifierModel
 import org.multipaz.util.Logger
-import org.multipaz.util.UUID
-import org.multipaz.util.fromBase64Url
 
 private const val TAG = "ReadScreen"
-private val TRANSPORT_OPTIONS = MdocTransportOptions(bleUseL2CAP = false, bleUseL2CAPInEngagement = true)
+private const val WAITING_FOR_HOLDER = "Waiting for the holder to review the request on their phone…"
+private const val HOLD_PHONES_TOGETHER = "Hold the wallet phone against the back of this phone."
 
 private sealed class ReadState {
     data object Choose : ReadState()
@@ -109,47 +101,18 @@ fun ReadScreen(
     }
 
     fun readQr(qrCode: String) {
-        val encodedDeviceEngagement = ByteString(qrCode.removePrefix("mdoc:").fromBase64Url())
         run("Connecting to the wallet…") {
-            val transport = PhotoIdReader.createTransportForQrEngagement(encodedDeviceEngagement, TRANSPORT_OPTIONS)
-            state = ReadState.Working("Waiting for the holder to review the request on their phone…")
-            PhotoIdReader.read(useCase, encodedDeviceEngagement, Simple.NULL, transport, model.readerKey)
+            PhotoIdReader.readQr(useCase, qrCode, model.readerKey, onConnected = {
+                state = ReadState.Working(WAITING_FOR_HOLDER)
+            })
         }
     }
 
     fun readNfc(reader: NfcTagReader) {
-        run("Hold the wallet phone against the back of this phone.") {
-            val uuid = UUID.randomUUID()
-            reader.scanMdocReader(
-                message = "Hold the wallet phone against the back of this phone.",
-                options = TRANSPORT_OPTIONS,
-                handoverOptions = MdocReaderNfcHandoverOptions(),
-                selectConnectionMethod = { it.firstOrNull() },
-                negotiatedHandoverConnectionMethods = listOf(
-                    MdocConnectionMethodBle(
-                        supportsPeripheralServerMode = false,
-                        supportsCentralClientMode = true,
-                        peripheralServerModeUuid = null,
-                        centralClientModeUuid = uuid,
-                    ),
-                    MdocConnectionMethodBle(
-                        supportsPeripheralServerMode = true,
-                        supportsCentralClientMode = false,
-                        peripheralServerModeUuid = uuid,
-                        centralClientModeUuid = null,
-                    ),
-                ),
-            ) { scan ->
-                state = ReadState.Working("Waiting for the holder to review the request on their phone…")
-                PhotoIdReader.read(
-                    useCase = useCase,
-                    encodedDeviceEngagement = scan.encodedDeviceEngagement,
-                    handover = scan.handover,
-                    transport = scan.transport,
-                    readerKey = model.readerKey,
-                    insertSequenceNumbers = scan.type == MdocHandoverType.V2_HANDOVER,
-                )
-            }
+        run(HOLD_PHONES_TOGETHER) {
+            PhotoIdReader.readNfc(useCase, reader, model.readerKey, HOLD_PHONES_TOGETHER, onEngaged = {
+                state = ReadState.Working(WAITING_FOR_HOLDER)
+            })
         }
     }
 

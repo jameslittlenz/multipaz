@@ -9,31 +9,22 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.io.bytestring.decodeToString
 import kotlinx.io.bytestring.encodeToByteString
 import org.multipaz.compose.document.DocumentModel
-import org.multipaz.crypto.Algorithm
 import org.multipaz.document.DocumentStore
 import org.multipaz.document.buildDocumentStore
 import org.multipaz.documenttype.DocumentTypeRepository
-import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.presentment.PresentmentSource
-import org.multipaz.presentment.SimplePresentmentSource
 import org.multipaz.prompt.AndroidPromptModel
 import org.multipaz.prompt.PromptModel
 import org.multipaz.provisioning.DocumentProvisioningHandler
-import org.multipaz.provisioning.DocumentProvisioningSettings
 import org.multipaz.provisioning.ProvisioningModel
 import org.multipaz.provisioning.openid4vci.OpenID4VCIBackend
-import org.multipaz.provisioning.openid4vci.OpenID4VCIBackendStub
 import org.multipaz.provisioning.openid4vci.OpenID4VCIClientPreferences
-import org.multipaz.rpc.client.RpcAuthorizedDeviceClient
-import org.multipaz.rpc.handler.RpcAuthClientSession
-import org.multipaz.rpc.handler.RpcExceptionMap
 import org.multipaz.samples.validatopia.shared.idv.DevWalletBackend
 import org.multipaz.samples.validatopia.shared.idv.IdvClient
-import org.multipaz.samples.validatopia.shared.trust.ValidatopiaTrust
+import org.multipaz.samples.validatopia.shared.wallet.ValidatopiaWallet
 import org.multipaz.securearea.SecureArea
 import org.multipaz.securearea.SecureAreaRepository
 import org.multipaz.storage.Storage
@@ -93,38 +84,16 @@ class WalletModel private constructor(
         backend?.takeIf { it.first == url }?.second ?: createBackend(url).also { backend = url to it }
     }
 
-    private suspend fun createBackend(issuerUrl: String): OpenID4VCIBackend {
+    private suspend fun createBackend(issuerUrl: String): OpenID4VCIBackend =
         if (BuildConfig.USE_DEV_ATTESTATION) {
-            return DevWalletBackend.create()
+            DevWalletBackend.create()
+        } else {
+            ValidatopiaWallet.createAttestedBackend(issuerUrl, Android, secureArea, storage)
         }
-        // In the Validatopia container the back-end server sits next to the issuer: /openid4vci
-        // and /backend under the same host.
-        val backendUrl = issuerUrl.removeSuffix("/").substringBeforeLast("/") + "/backend/rpc"
-        val client = RpcAuthorizedDeviceClient.connect(
-            exceptionMap = RpcExceptionMap.Builder().build(),
-            httpClientEngine = Android,
-            url = backendUrl,
-            secureArea = secureArea,
-            storage = storage,
-        )
-        return OpenID4VCIBackendStub(
-            endpoint = "openid4vci_backend",
-            dispatcher = client.dispatcher,
-            notifier = client.notifier,
-        )
-    }
 
     /** OpenID4VCI client preferences for redeeming the issuer's offers. */
-    suspend fun getClientPreferences(): OpenID4VCIClientPreferences {
-        val backend = getBackend()
-        return OpenID4VCIClientPreferences(
-            clientId = withContext(RpcAuthClientSession()) { backend.getClientId() },
-            // Only pre-authorized offers are used, so no authorization redirect ever happens.
-            redirectUrl = "https://localhost/validatopia-wallet/redirect",
-            locales = listOf("en-US"),
-            signingAlgorithms = listOf(Algorithm.ESP256),
-        )
-    }
+    suspend fun getClientPreferences(): OpenID4VCIClientPreferences =
+        ValidatopiaWallet.clientPreferences(getBackend())
 
     /** A client for the issuer's identity-proofing endpoints. */
     suspend fun createIdvClient(): IdvClient = IdvClient(
@@ -147,12 +116,6 @@ class WalletModel private constructor(
         private const val KEY_ISSUER_URL = "issuer_url"
         private const val KEY_CONSENT_ACCEPTED = "consent_accepted"
 
-        /** Credential domain for keys that need the screen lock (or biometrics) to present. */
-        const val DOMAIN_USER_AUTH = "mdoc_user_auth"
-
-        /** Credential domain for keys usable without the screen lock, on devices without one. */
-        const val DOMAIN_NO_USER_AUTH = "mdoc_no_user_auth"
-
         private val lock = Mutex()
         private var instance: WalletModel? = null
 
@@ -164,20 +127,12 @@ class WalletModel private constructor(
         private suspend fun create(context: Context): WalletModel {
             val storage = Platform.nonBackedUpStorage
             val secureArea = Platform.getSecureArea(storage)
-            val documentTypeRepository = DocumentTypeRepository().apply {
-                addDocumentType(PhotoID.getDocumentType())
-            }
+            val documentTypeRepository = ValidatopiaWallet.createDocumentTypeRepository()
             val documentStore = buildDocumentStore(
                 storage = storage,
                 secureAreaRepository = SecureAreaRepository.Builder().add(secureArea).build(),
             ) {}
-            val readerTrustManager = ValidatopiaTrust.createReaderTrustManager()
-            val presentmentSource = SimplePresentmentSource(
-                documentStore = documentStore,
-                documentTypeRepository = documentTypeRepository,
-                resolveTrustFn = { requester -> ValidatopiaTrust.resolveRequester(requester, readerTrustManager) },
-                domainsMdocSignature = listOf(DOMAIN_USER_AUTH, DOMAIN_NO_USER_AUTH),
-            )
+            val presentmentSource = ValidatopiaWallet.createPresentmentSource(documentStore, documentTypeRepository)
             // Keys that require user authentication can only be created with a secure lock screen
             // (an emulator usually has none), so only ask for them when there is one.
             val deviceSecure = context.getSystemService(KeyguardManager::class.java).isDeviceSecure
@@ -186,12 +141,7 @@ class WalletModel private constructor(
                 documentProvisioningHandler = DocumentProvisioningHandler(
                     secureArea = secureArea,
                     documentStore = documentStore,
-                    defaultDocumentProvisioningSettings = DocumentProvisioningSettings().copy(
-                        requestUserAuth = deviceSecure,
-                        requestNoUserAuth = !deviceSecure,
-                        mdocUserAuthDomain = DOMAIN_USER_AUTH,
-                        mdocNoUserAuthDomain = DOMAIN_NO_USER_AUTH,
-                    ),
+                    defaultDocumentProvisioningSettings = ValidatopiaWallet.provisioningSettings(deviceSecure),
                 ),
                 httpClient = HttpClient(Android) { followRedirects = false },
                 promptModel = promptModel,

@@ -32,12 +32,10 @@ import org.multipaz.compose.presentment.MdocProximityQrPresentment
 import org.multipaz.compose.presentment.MdocProximityQrSettings
 import org.multipaz.compose.prompt.PresentmentActivity
 import org.multipaz.compose.qrcode.generateQrCode
-import org.multipaz.mdoc.connectionmethod.MdocConnectionMethodBle
-import org.multipaz.mdoc.transport.MdocTransportOptions
 import org.multipaz.presentment.PresentmentCanceledException
+import org.multipaz.samples.validatopia.shared.transport.ValidatopiaTransport
 import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
 import org.multipaz.samples.validatopia.wallet.WalletModel
-import org.multipaz.util.UUID
 
 /**
  * Presents the Photo ID by QR code: the verifier scans the code, then the two phones connect over
@@ -82,24 +80,10 @@ fun PresentQrScreen(model: WalletModel, documentId: String, onBack: () -> Unit) 
                 prepareSettings = { generateQrCode ->
                     // Show the code straight away; there's nothing to configure.
                     LaunchedEffect(Unit) {
-                        val uuid = UUID.randomUUID()
                         generateQrCode(
                             MdocProximityQrSettings(
-                                availableConnectionMethods = listOf(
-                                    MdocConnectionMethodBle(
-                                        supportsPeripheralServerMode = false,
-                                        supportsCentralClientMode = true,
-                                        peripheralServerModeUuid = null,
-                                        centralClientModeUuid = uuid,
-                                    ),
-                                    MdocConnectionMethodBle(
-                                        supportsPeripheralServerMode = true,
-                                        supportsCentralClientMode = false,
-                                        peripheralServerModeUuid = uuid,
-                                        centralClientModeUuid = null,
-                                    ),
-                                ),
-                                createTransportOptions = MdocTransportOptions(bleUseL2CAP = false, bleUseL2CAPInEngagement = true),
+                                availableConnectionMethods = ValidatopiaTransport.bleConnectionMethods(),
+                                createTransportOptions = ValidatopiaTransport.options,
                             )
                         )
                     }
