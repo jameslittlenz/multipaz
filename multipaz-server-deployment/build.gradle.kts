@@ -16,11 +16,15 @@ tasks.register("collectDependencies") {
     description = "Collect thin server JARs and shared dependency JARs into a staging directory"
     group = "multipaz-server-deployment"
 
-    // Depend on jar tasks for server projects plus their full runtime classpath build dependencies
+    // Depend on jar tasks for server projects plus their full runtime classpath build dependencies,
+    // and declare them as inputs: without inputs, Gradle would treat the staging directory as up to
+    // date whenever it exists and keep copying stale JARs into the image.
     for (name in serverProjects) {
         val serverProject = project(":${name}")
         dependsOn(serverProject.tasks.named("jar"))
         dependsOn(serverProject.configurations.getByName("runtimeClasspath").buildDependencies)
+        inputs.files(serverProject.tasks.named<Jar>("jar").flatMap { it.archiveFile })
+        inputs.files(serverProject.configurations.getByName("runtimeClasspath"))
     }
 
     val stagingDir = layout.buildDirectory.dir("docker-staging")
@@ -30,6 +34,9 @@ tasks.register("collectDependencies") {
     doLast {
         val jarsDir = stagingDir.get().dir("jars").asFile
         val libsDir = stagingDir.get().dir("libs").asFile
+        // Start clean, so JARs no longer on any runtime classpath don't linger in the image.
+        jarsDir.deleteRecursively()
+        libsDir.deleteRecursively()
         jarsDir.mkdirs()
         libsDir.mkdirs()
 
