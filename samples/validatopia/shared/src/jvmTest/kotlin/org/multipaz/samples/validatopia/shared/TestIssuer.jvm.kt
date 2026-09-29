@@ -65,8 +65,8 @@ private val FAKE_JPEG = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())
 private val PERSONAS = """
     [{ "id": "p1", "given_name": "Claudia", "family_name": "Hill", "birth_date": "2002-01-01",
        "sex": 2, "nationality": "NZL", "document_number": "AA1234567",
-       "expiry_date": "2035-01-01", "portrait": "p1.jpg" },
-     { "id": "p2", "given_name": "Kai", "family_name": "Sorensen", "birth_date": "1988-11-02",
-       "sex": 1, "nationality": "XVA", "document_number": "XVP000002",
-       "expiry_date": "2031-11-02", "portrait": "p2.jpg" }]
+       "expiry_date": "2035-01-01", "portrait": "claudia.jpg" },
+     { "id": "p2", "given_name": "Richard", "family_name": "Smyth", "birth_date": "1982-11-02",
+       "sex": 1, "nationality": "AUS", "document_number": "ZZ7654321",
+       "expiry_date": "2031-11-02", "portrait": "richard.jpg" }]
 """.trimIndent()
