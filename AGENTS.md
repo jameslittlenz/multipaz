@@ -81,3 +81,11 @@ Do not automatically create a commit when implementing the code, only create one
 *   **Run Android Test App Unit Tests:** `./gradlew :samples:testapp:testDebugUnitTest`
 *   **Build iOS Test App:** Open Xcode workspace or project and build: `xcodebuild -project samples/testapp/iosApp/TestApp.xcodeproj -scheme TestApp -sdk iphonesimulator build`
 *   **Build Swift Test App:** `xcodebuild -project samples/SwiftTestApp/SwiftTestApp.xcodeproj -scheme SwiftTestApp -sdk iphonesimulator build`
+
+## 7. Deployed Validatopia Issuance Server
+The live Validatopia issuer (`multipaz-server-deployment`, `PROFILE=validatopia`) is reached with `ssh aws-server`, an Ubuntu x86_64 host with passwordless `sudo`. Details, including backups and resetting the admin password, are in `docs/validatopia/PLAN.md` under "Deployed issuance server".
+*   **URLs:** wallet API `https://validatopia-server.linodigital.co.nz` (issuer `…/openid4vci`), admin site `https://validatopia-admin.linodigital.co.nz`. Caddy (`/etc/caddy/Caddyfile`) terminates TLS and proxies them to `localhost:6000` and `localhost:6001`.
+*   **Layout:** `~/validatopia-server/docker-compose.yml` runs the container `validatopia-server` from `multipaz/server-bundle:latest-amd64`. Data (SQLite) is in the `validatopia-server_validatopia-data` volume, and `.env` holds `ADMIN_BOOTSTRAP_PASS`. Never copy passwords from the server into the repo or commit messages.
+*   **Deploy:** `./gradlew :multipaz-server-deployment:buildDockerImageAmd64`, then `docker save multipaz/server-bundle:latest-amd64 | gzip -1 | ssh aws-server 'gunzip | sudo docker load'`, then `ssh aws-server 'cd ~/validatopia-server && sudo docker compose up -d'`. Run `multipaz-server-deployment/validatopia-smoke.sh` on the native image first.
+*   **Logs:** `sudo docker exec validatopia-server tail /app/logs/openid4vci.log` (issuer) and `/var/log/nginx/access.log` (nginx, including requests it answered with 404 itself).
+*   **Changing the server** (restarting, deploying, editing Caddy or the database) affects a public service: confirm with the user first, and back up `/etc/caddy/Caddyfile` or `openid4vci.db` before editing them.

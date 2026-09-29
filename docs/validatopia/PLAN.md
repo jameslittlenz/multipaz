@@ -415,6 +415,56 @@ The iOS builds and tests need macOS with Xcode. This Linux environment can't com
 - **Suggested first prompt for Claude Code:** "Read `docs/validatopia/PLAN.md` and `CLAUDE.md`, then implement milestone M0 and then M1. Run the listed Gradle tests after each and stop at the end of each milestone for review."
 - **Before M1's crypto work:** decide the Validatopia country codes, and have NZ and AU CSCA certificates available.
 
+## Deployed issuance server
+The live Validatopia issuer runs the container's `PROFILE=validatopia` on a Linux server behind Caddy. Passwords are never kept in the repo.
+
+**Access and layout**
+- **Host:** `ssh aws-server`, an alias in the developer's `~/.ssh/config`. It runs Ubuntu 24.04 on x86_64, with passwordless `sudo`, at public IP `52.64.118.51`. The server has about 2 GB of RAM, and the container uses roughly 220 MB.
+- **Public URLs** (DNS A records at Cloudflare, pointing at `52.64.118.51`):
+  - Wallet API: `https://validatopia-server.linodigital.co.nz`. The issuer is at `…/openid4vci`, and that is the wallets' issuer URL, ending in `/openid4vci`.
+  - Admin site: `https://validatopia-admin.linodigital.co.nz`.
+- **Caddy** (`/etc/caddy/Caddyfile`, systemd unit `caddy`) terminates TLS with Let's Encrypt and proxies `validatopia-server` → `localhost:6000` and `validatopia-admin` → `localhost:6001`. The same Caddy also serves other sites, so edit only the two Validatopia blocks. Back up the file first, then run `sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` and `sudo systemctl reload caddy`.
+- **Docker CE** with the compose plugin. `~/validatopia-server/docker-compose.yml` runs the image `multipaz/server-bundle:latest-amd64` as the container `validatopia-server`:
+  - `PROFILE=validatopia` and `BASE_URL=https://validatopia-server.linodigital.co.nz`.
+  - Ports `127.0.0.1:6000` (wallet API) and `127.0.0.1:6001` (admin site), reachable only through Caddy.
+  - `restart: unless-stopped`.
+- **`~/validatopia-server/.env`** (mode 600) holds `ADMIN_BOOTSTRAP_PASS`. It is only used to create the `admin` account when none exists.
+- **Volumes:**
+  - `validatopia-server_validatopia-data` is `/app/data`: the issuer's `openid4vci.db` and the backend's `backend.db` (SQLite; records are CBOR blobs), and the personas. It survives restarts and image updates.
+  - `validatopia-server_validatopia-logs` is `/app/logs`.
+
+**Deploy an update** (from the repo, on a Mac)
+```
+./gradlew :multipaz-server-deployment:buildDockerImageAmd64
+docker save multipaz/server-bundle:latest-amd64 | gzip -1 | ssh aws-server 'gunzip | sudo docker load'
+ssh aws-server 'cd ~/validatopia-server && sudo docker compose up -d && sudo docker image prune -f'
+```
+Run `./multipaz-server-deployment/validatopia-smoke.sh` against the native image first. On macOS, AirPlay takes port 5000 and other ports may be taken too, so pass `WALLET_PORT`/`ADMIN_PORT` if needed. Afterwards, check `https://validatopia-server.linodigital.co.nz/.well-known/openid-credential-issuer/openid4vci`, which should return 200 and list all four credential configurations.
+
+**Operate**
+- **Status:** `ssh aws-server 'cd ~/validatopia-server && sudo docker compose ps'`.
+- **Issuer log:** `sudo docker exec validatopia-server tail -f /app/logs/openid4vci.log`.
+- **nginx access log:** `sudo docker exec validatopia-server tail -f /var/log/nginx/access.log`. It shows requests that nginx answered itself, such as 404s, which never reach the issuer.
+- **Caddy log:** `sudo journalctl -u caddy`.
+- **Database:** `sudo docker exec validatopia-server sqlite3 /app/data/openid4vci.db ".tables"`. Tables are prefixed `Mz`, for example `MzAdminAccounts`, `MzAdminActionLog` (logins and failures, with the client IP) and `MzIssuanceAudit`.
+- **Back up:**
+  - Stop the container with `sudo docker compose stop`.
+  - Copy `openid4vci.db` and `backend.db` out of the data volume. Its path comes from `sudo docker volume inspect validatopia-server_validatopia-data --format '{{.Mountpoint}}'`.
+  - Then start it again with `sudo docker compose up -d`.
+
+**Reset the admin password, or clear a lockout.** Three failed logins lock the account for 30 s, doubling to at most 15 min, until a full login succeeds. There's no admin CLI, so the account is recreated through the bootstrap path:
+1. `cd ~/validatopia-server && sudo docker compose stop`, then back up `openid4vci.db` as above.
+2. Delete the account using the image's `sqlite3`, with the data volume mounted: `sudo docker run --rm -v validatopia-server_validatopia-data:/app/data --entrypoint sqlite3 multipaz/server-bundle:latest-amd64 /app/data/openid4vci.db "delete from MzAdminAccounts where id = 'admin';"`.
+3. Put the new password in `.env` as `ADMIN_BOOTSTRAP_PASS=…`, then run `sudo docker compose up -d`. The log shows "Bootstrapped admin account 'admin'", and TOTP enrollment happens on the next login.
+
+This only works when `admin` is the sole account, because bootstrap runs only when there are none. Other accounts are managed on the admin site's Accounts page.
+
+**Gotchas**
+- **DNS:** new names can be cached as nonexistent for up to 30 minutes by a local resolver (for example a Pi-hole; its "Restart DNS resolver" button clears the cache). Test from outside with `curl --resolve <host>:443:52.64.118.51`.
+- **Wallet issuer URL:** it must end in `/openid4vci`. Without that, wallets post to `/challenge` at the root and get a 404.
+- **Admin site exposure:** it's public and gets crawled. Logins need a password plus TOTP; `ADMIN_ALLOW_CIDR` in the compose file can restrict it to known addresses.
+- **Moving hosts:** change `BASE_URL` in the compose file, the Caddy site names and the DNS records together.
+
 ## Open questions / risks
 - The Validatopia codes: proposed alpha-2 `XV` and alpha-3 `XVA`, from the ISO user-assigned range. To be confirmed.
 - **Brainpool on iOS** is the hardest crypto gap. It only matters if NZ or AU passports use brainpool, which the M1 discovery task settles. Until it's done, those passports degrade gracefully to "unsupported on device".
