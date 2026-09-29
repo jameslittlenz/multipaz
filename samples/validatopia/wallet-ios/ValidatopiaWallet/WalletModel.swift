@@ -60,7 +60,7 @@ final class WalletModel {
     static let defaultIssuerUrl: String =
         (Bundle.main.object(forInfoDictionaryKey: "ValidatopiaIssuerUrl") as? String).flatMap {
             $0.isEmpty ? nil : $0
-        } ?? "http://localhost:8000/openid4vci"
+        } ?? "http://localhost:6000/openid4vci"
 
     func load() async {
         do {

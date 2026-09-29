@@ -206,9 +206,26 @@ and must be removed at very least in the container environment.
 (see `docs/validatopia/PLAN.md`). Admin accounts use Argon2id-hashed passwords and mandatory TOTP,
 not `ADMIN_PASS`.
 
+nginx serves the profile on two ports:
+
+| Port | Serves |
+|------|--------|
+| 6000 | The wallet API: the issuer under `/openid4vci/`, the device-attestation backend under `/backend/`, and the `.well-known` documents. The admin site and `/admin_*` API are not found here. |
+| 6001 | The admin site (`/` redirects to it) and its `/admin_*` API, and nothing else. |
+
+`BASE_URL` is the wallet API's address, so with the defaults it's `http://localhost:6000`. Keep the
+admin port off the public internet (bind it to `127.0.0.1`, as below, or restrict it with
+`ADMIN_ALLOW_CIDR`).
+
+Browsers refuse to connect to port 6000 (the X11 port), so the wallet API can't be opened in a
+browser directly; the wallets' own HTTP clients aren't affected, and neither is the admin site on
+6001. A reverse proxy in front (for example serving `https://validatopia.example.com` from port
+6000) avoids this.
+
 ```bash
 podman run -d --rm \
-    -p 127.0.0.1:8000:8000 \
+    -p 127.0.0.1:6000:6000 \
+    -p 127.0.0.1:6001:6001 \
     -e PROFILE=validatopia \
     -e BASE_URL=https://validatopia.your-domain.com \
     -e ADMIN_BOOTSTRAP_USER=admin \
@@ -230,7 +247,7 @@ must complete TOTP enrollment on its first login (see the admin site's login pag
 | `ADMIN_BOOTSTRAP_PASS` | *(none)* | Password for that account. Required unless `BASE_URL` is a loopback address. |
 | `ADMIN_ALLOW_CIDR` | *(none, unrestricted)* | Comma-separated IPv4/IPv6 CIDR blocks allowed to reach `/admin_*` endpoints. |
 | `IDV_DEMO_MODE` | `false` | Passed through to the server as `idv_demo_mode`; informational for now (the admin-editable settings, e.g. "accept untrusted CSCA", are the actual runtime controls — see the Settings admin page). |
-| `TLS_CERT` / `TLS_KEY` | *(none)* | Paths (inside the container, so mount them via `-v`) to a certificate/key pair for nginx to terminate TLS on port 8443 directly. **Not needed, and not the expected setup, if you front this container with your own reverse proxy** (e.g. Caddy, nginx, an ALB) that already terminates TLS — which is the normal case for `BASE_URL` being `https://...` while the container itself only speaks plain HTTP on port 8000. In that setup, bind the container's port to `127.0.0.1` (as in the example above) and point your reverse proxy at it. nginx trusts `X-Forwarded-For`/`X-Forwarded-Proto` from private-network peers only (see `nginx-validatopia-locations.conf`), so rate limiting and `ADMIN_ALLOW_CIDR` see the real client address rather than your reverse proxy's. |
+| `TLS_CERT` / `TLS_KEY` | *(none)* | Paths (inside the container, so mount them via `-v`) to a certificate/key pair for nginx to terminate TLS directly, on port 8443 for the wallet API and 8444 for the admin site. **Not needed, and not the expected setup, if you front this container with your own reverse proxy** (e.g. Caddy, nginx, an ALB) that already terminates TLS — which is the normal case for `BASE_URL` being `https://...` while the container itself only speaks plain HTTP on ports 6000 and 6001. In that setup, bind the container's ports to `127.0.0.1` (as in the example above) and point your reverse proxy at them. nginx trusts `X-Forwarded-For`/`X-Forwarded-Proto` from private-network peers only (see `nginx-validatopia-common.conf`), so rate limiting and `ADMIN_ALLOW_CIDR` see the real client address rather than your reverse proxy's. |
 
 ### Placeholder personas
 

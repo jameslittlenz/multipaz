@@ -263,8 +263,8 @@ Extends the existing plain HTML/JS in `multipaz-openid4vci/src/main/resources/re
   - placeholder personas
 - Volumes: `/app/data` holds the sqlite databases, personas, CSCA uploads and the encryption-key storage; `/app/logs` holds logs. The IACA and the Validatopia keys persist in `/app/data`, so they survive restarts.
 - Environment variables: `BASE_URL`, `ADMIN_BOOTSTRAP_USER/PASS`, `IDV_DEMO_MODE`, `ADMIN_ALLOW_CIDR` and `TLS_CERT/TLS_KEY` (optional).
-- Fix the Dockerfile: `EXPOSE 8000`, not 8080.
-- `docker run -p 8000:8000 -v vdata:/app/data -e BASE_URL=https://… -e ADMIN_BOOTSTRAP_PASS=… multipaz/validatopia:latest`
+- nginx serves the wallet API (issuer, IDV, backend, `.well-known`) on port **6000** and the admin site and `/admin_*` API on port **6001**, each port refusing the other's paths; with TLS_CERT/TLS_KEY, 8443 and 8444 respectively.
+- `docker run -p 6000:6000 -p 6001:6001 -v vdata:/app/data -e PROFILE=validatopia -e BASE_URL=https://… -e ADMIN_BOOTSTRAP_PASS=… multipaz/server-bundle:latest`
 
 ### H. Apps
 **Layout**
@@ -369,7 +369,7 @@ Extends the existing plain HTML/JS in `multipaz-openid4vci/src/main/resources/re
 - Admin site: Playwright + axe-core.
 
 **Container smoke test**
-- Build the image, run it with `BASE_URL=http://localhost:8000`, then run a script that checks health, IACA fetch, admin login and the persona-issuance flow.
+- Build the image, run it with `BASE_URL=http://localhost:6000`, then run a script that checks health, IACA fetch, that each port serves only its own half, admin login (on port 6001) and the persona-issuance flow.
 
 ## Milestones (each ends demoable)
 - **M0.** Scaffolding: modules, `settings.gradle.kts`, catalog entries, `detektModules`, empty apps on both platforms, Validatopia design tokens.

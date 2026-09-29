@@ -29,8 +29,10 @@ Trust anchors (IACA, test CSCA, reader root) are fixed TEST keys shared by every
      -param admin_bootstrap_pass=dev-only-password"
    ```
 
-   Or run the container with `PROFILE=validatopia` and `BASE_URL=http://localhost:8000`; its issuer
-   is at `http://localhost:8000/openid4vci`, which is the wallets' default.
+   Or run the container with `PROFILE=validatopia` (see
+   [`multipaz-server-deployment/README.md`](../../multipaz-server-deployment/README.md)); its issuer
+   is at `http://localhost:6000/openid4vci`, which is the wallets' default, and its admin site at
+   `http://localhost:6001`.
 
 2. Build the wallet pointed at the issuer, and install both apps. `adb reverse` makes the
    phone's `localhost` reach the host (repeat it for each device):

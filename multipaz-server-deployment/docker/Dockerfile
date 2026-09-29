@@ -26,7 +26,9 @@ RUN chmod -R 755 /app/web
 # (start-servers.sh) when PROFILE=validatopia; nginx.conf remains the default profile's config.
 COPY multipaz-server-deployment/docker/nginx.conf /etc/nginx/nginx.conf
 COPY multipaz-server-deployment/docker/nginx-validatopia.conf /etc/nginx/nginx-validatopia.conf
-COPY multipaz-server-deployment/docker/nginx-validatopia-locations.conf /etc/nginx/conf.d/validatopia-locations.conf
+COPY multipaz-server-deployment/docker/nginx-validatopia-common.conf /etc/nginx/conf.d/validatopia-common.conf
+COPY multipaz-server-deployment/docker/nginx-validatopia-wallet.conf /etc/nginx/conf.d/validatopia-wallet.conf
+COPY multipaz-server-deployment/docker/nginx-validatopia-admin.conf /etc/nginx/conf.d/validatopia-admin.conf
 
 # Copy Multipaz services configurations
 COPY multipaz-server-deployment/docker/services/backend.conf /etc/multipaz/backend.conf
@@ -59,8 +61,9 @@ RUN mkdir -p /var/lib/nginx/body /var/log/nginx /run /run/nginx && \
 
 USER multipaz
 
-# Expose unified port (nginx; 8443 when TLS_CERT/TLS_KEY are mounted for the validatopia
-# profile) and individual service ports (used directly in MODE=direct).
-EXPOSE 8000 8443 8004 8005 8006 8007 8008
+# Expose the unified port (nginx, default profile), the validatopia profile's wallet API and admin
+# site ports (6000 and 6001; 8443 and 8444 when TLS_CERT/TLS_KEY are mounted), and individual
+# service ports (used directly in MODE=direct).
+EXPOSE 8000 6000 6001 8443 8444 8004 8005 8006 8007 8008
 
 ENTRYPOINT ["/app/start-servers.sh"]

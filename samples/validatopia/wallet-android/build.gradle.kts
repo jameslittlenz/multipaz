@@ -12,10 +12,10 @@ val projectVersionCode: Int by rootProject.extra
 val projectVersionName: String by rootProject.extra
 
 // The issuer the wallet talks to until the user changes it in Settings. The default suits an
-// emulator or USB-connected phone with `adb reverse tcp:8000 tcp:8000` and the Validatopia
-// container running locally with BASE_URL=http://localhost:8000.
+// emulator or USB-connected phone with `adb reverse tcp:6000 tcp:6000` and the Validatopia
+// container running locally, its wallet API on port 6000.
 val validatopiaIssuerUrl = (project.findProperty("validatopia.issuerUrl") as String?)
-    ?: "http://localhost:8000/openid4vci"
+    ?: "http://localhost:6000/openid4vci"
 
 kotlin {
     jvmToolchain(17)

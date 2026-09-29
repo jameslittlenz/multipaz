@@ -1,8 +1,9 @@
 #!/bin/sh
 # Container smoke test for the Validatopia profile (docs/validatopia/PLAN.md's M3 completion bar:
 # "Safe to deploy publicly", automated-tests section: "build the image, run it with
-# BASE_URL=http://localhost:8000, then run a script that checks health, IACA fetch, admin login
-# and the persona-issuance flow").
+# BASE_URL=http://localhost:6000, then run a script that checks health, IACA fetch, admin login
+# and the persona-issuance flow"). The wallet API is on port 6000 and the admin site on port 6001;
+# the script also checks that each port only serves its own half.
 #
 # Usage:
 #   ./gradlew :multipaz-server-deployment:buildDockerImage && ./multipaz-server-deployment/validatopia-smoke.sh
@@ -29,7 +30,12 @@ fi
 
 IMAGE="${IMAGE:-multipaz/server-bundle:latest}"
 CONTAINER_NAME="validatopia-smoke-$$"
-BASE_URL="http://localhost:8000"
+# Host ports to publish the container's wallet API (6000) and admin site (6001) on; override them
+# if something else already listens there.
+WALLET_PORT="${WALLET_PORT:-6000}"
+ADMIN_PORT="${ADMIN_PORT:-6001}"
+BASE_URL="http://localhost:$WALLET_PORT"
+ADMIN_URL="http://localhost:$ADMIN_PORT"
 ADMIN_USER="admin"
 ADMIN_PASS="smoke-test-password-$$"
 
@@ -46,7 +52,8 @@ trap cleanup EXIT
 
 echo "Starting container ($CONTAINER_TOOL) from $IMAGE..."
 "$CONTAINER_TOOL" run -d --rm --name "$CONTAINER_NAME" \
-    -p 8000:8000 \
+    -p "$WALLET_PORT:6000" \
+    -p "$ADMIN_PORT:6001" \
     -e "BASE_URL=$BASE_URL" \
     -e "PROFILE=validatopia" \
     -e "ADMIN_BOOTSTRAP_USER=$ADMIN_USER" \
@@ -87,8 +94,22 @@ case "$iaca" in
     *) fail "IACA response did not look like a PEM certificate" ;;
 esac
 
+# --- Each port serves only its own half ---
+status() {
+    curl -s -o /dev/null -w '%{http_code}' "$@"
+}
+[ "$(status "$ADMIN_URL/openid4vci/admin.html")" = "200" ] || fail "admin site not served on the admin port"
+echo "OK: admin site served on the admin port"
+[ "$(status -X POST "$BASE_URL/openid4vci/admin_login")" = "404" ] || fail "admin API reachable on the wallet port"
+[ "$(status "$BASE_URL/openid4vci/admin.html")" = "404" ] || fail "admin site reachable on the wallet port"
+echo "OK: admin site and API not found on the wallet port"
+[ "$(status "$ADMIN_URL/openid4vci/ca/credential_signing")" = "404" ] || fail "issuer API reachable on the admin port"
+echo "OK: issuer API not found on the admin port"
+[ "$(status "$BASE_URL/openid4vci/preauthorized_offer")" = "403" ] || fail "/preauthorized_offer not denied"
+echo "OK: /preauthorized_offer denied"
+
 # --- Admin login, step 1: password ---
-login_response=$(curl -sf -X POST "$BASE_URL/openid4vci/admin_login" \
+login_response=$(curl -sf -X POST "$ADMIN_URL/openid4vci/admin_login" \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}") \
     || fail "admin_login request failed"
@@ -119,7 +140,7 @@ PYEOF
 }
 code=$(compute_totp "$secret") || fail "could not compute TOTP code (is python3 installed?)"
 
-totp_response=$(curl -sf -i -X POST "$BASE_URL/openid4vci/admin_login_totp" \
+totp_response=$(curl -sf -i -X POST "$ADMIN_URL/openid4vci/admin_login_totp" \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$ADMIN_USER\",\"code\":\"$code\"}") \
     || fail "admin_login_totp request failed"
@@ -133,7 +154,7 @@ csrf_token=$(printf '%s' "$totp_response" | sed -n 's/.*"csrf_token":"\([^"]*\)"
 [ -n "$csrf_token" ] || fail "no csrf_token in admin_login_totp response"
 
 # --- Persona-issuance flow: the seeded placeholder personas should be visible via the admin API ---
-personas_response=$(curl -sf "$BASE_URL/openid4vci/admin_personas" -H "Cookie: $session_cookie") \
+personas_response=$(curl -sf "$ADMIN_URL/openid4vci/admin_personas" -H "Cookie: $session_cookie") \
     || fail "admin_personas request failed"
 case "$personas_response" in
     *'"id":"p1"'*) echo "OK: seeded persona 'p1' is visible" ;;

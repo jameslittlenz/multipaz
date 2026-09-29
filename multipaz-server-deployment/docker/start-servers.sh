@@ -5,8 +5,19 @@
 
 set -e
 
-# Base URL for proxy mode (nginx routes by path)
-BASE_URL="${BASE_URL:-http://localhost:8000}"
+# Profile: "full" (default) starts every reference server; "validatopia" starts only the
+# openid4vci (issuer/admin site) and backend (device-attestation) services behind a hardened
+# nginx config (docs/validatopia/PLAN.md's Component G), serving the wallet API on port 6000 and
+# the admin site on port 6001.
+PROFILE="${PROFILE:-full}"
+
+# Base URL for proxy mode (nginx routes by path). For the validatopia profile it's the wallet API's
+# address (port 6000); the admin site is on the same host at port 6001.
+if [ "$PROFILE" = "validatopia" ]; then
+  BASE_URL="${BASE_URL:-http://localhost:6000}"
+else
+  BASE_URL="${BASE_URL:-http://localhost:8000}"
+fi
 
 no_protocol="${BASE_URL#*://}"      # strip protocol
 host_port="${no_protocol%%/*}"     # strip path
@@ -18,11 +29,6 @@ is_loopback_host() {
 
 # Mode: "proxy" (default) routes through nginx; "direct" exposes ports directly
 MODE="${MODE:-proxy}"
-
-# Profile: "full" (default) starts every reference server; "validatopia" starts only the
-# openid4vci (issuer/admin site) and backend (device-attestation) services behind a hardened
-# nginx config (docs/validatopia/PLAN.md's Component G).
-PROFILE="${PROFILE:-full}"
 
 # Additional params that can be passed to all servers
 EXTRA_PARAMS="${EXTRA_PARAMS:-}"
@@ -118,10 +124,23 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
-    include /etc/nginx/conf.d/validatopia-locations.conf;
+    include /etc/nginx/conf.d/validatopia-wallet.conf;
+}
+
+server {
+    listen 8444 ssl;
+    server_name _;
+
+    ssl_certificate     $TLS_CERT;
+    ssl_certificate_key $TLS_KEY;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    include /etc/nginx/conf.d/validatopia-admin.conf;
 }
 EOF
-      echo "TLS enabled on port 8443 (TLS_CERT=$TLS_CERT)"
+      echo "TLS enabled on ports 8443 (wallet API) and 8444 (admin site) (TLS_CERT=$TLS_CERT)"
     else
       echo "WARNING: TLS_CERT/TLS_KEY set but not both readable; serving HTTP only"
     fi
@@ -134,7 +153,11 @@ if [ "$MODE" = "proxy" ]; then
         setup_tls
         cp /etc/nginx/nginx-validatopia.conf /etc/nginx/nginx.conf
     fi
-    echo "Starting nginx reverse proxy on port 8000..."
+    if [ "$PROFILE" = "validatopia" ]; then
+        echo "Starting nginx reverse proxy: wallet API on port 6000, admin site on port 6001..."
+    else
+        echo "Starting nginx reverse proxy on port 8000..."
+    fi
     nginx -g 'daemon off;' &
     NGINX_PID=$!
     echo "  PID: ${NGINX_PID}"
