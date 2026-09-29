@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// The presenting screen for one document, following the NZ DISTF "flash pass" guidance: how to
-/// share, and a card with no identifying information. The holder's own details are a separate
-/// viewing screen, clearly marked as not for sharing. iOS apps can't present over NFC, so the only
-/// way to share here is a code for the verifier to scan (then Bluetooth).
+/// share, and a card showing only the holder's shortened name. The holder's own details are a
+/// separate viewing screen, clearly marked as not for sharing. iOS apps can't present over NFC, so
+/// the only way to share here is a code for the verifier to scan (then Bluetooth).
 struct DocumentView: View {
     @Environment(WalletModel.self) private var model
     let documentId: String

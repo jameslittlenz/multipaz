@@ -193,8 +193,8 @@ final class WalletModel {
 
     // The issuer supplies no card art, and multipaz-swiftui's fallback art shows the holder's name,
     // which the DISTF flash pass guidance rules out wherever a credential is presented (including
-    // the consent sheet). Every document gets Validatopia's own, non-identifying art instead, in its
-    // type's colors, and documents from before the per-type colors are brought up to date.
+    // the consent sheet). Every document gets Validatopia's own art instead, in its type's colors
+    // with only the holder's shortened name, and documents with older art are brought up to date.
     private func applyCardArtToExistingDocuments() async throws {
         for document in try await documentStore.listDocuments(sort: false) {
             try await applyCardArt(to: document)
@@ -220,7 +220,8 @@ final class WalletModel {
         // A new document has no credentials, so no type, until provisioning creates them.
         let style = try await ValidatopiaCardArt.shared.styleFor(document: document)
         guard style != ValidatopiaCardArt.shared.unknown else { return }
-        let art = DocumentCardArt.png(for: style)
+        let holderName = try await ValidatopiaCardArt.shared.holderShortName(document: document)
+        let art = DocumentCardArt.png(for: style, holderName: holderName)
         guard document.cardArt != art else { return }
         try await document.edit { editor in
             editor.cardArt = art

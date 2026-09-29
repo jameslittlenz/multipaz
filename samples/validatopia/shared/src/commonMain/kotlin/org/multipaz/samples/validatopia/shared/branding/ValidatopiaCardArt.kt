@@ -1,5 +1,6 @@
 package org.multipaz.samples.validatopia.shared.branding
 
+import org.multipaz.cbor.Tstr
 import org.multipaz.document.Document
 import org.multipaz.documenttype.knowntypes.AgeVerification
 import org.multipaz.documenttype.knowntypes.DrivingLicense
@@ -28,21 +29,24 @@ data class CardArtStyle(
 
 /**
  * Card art for the documents Validatopia Wallet holds, drawn on the device (the issuer supplies
- * none) by `PhotoIdCardArt` on Android and iOS from these styles.
+ * none) by `DocumentCardArt` on Android and iOS from these styles.
  *
- * It follows the NZ DISTF "flash pass" guidance
- * (https://github.com/nz-trust-framework/DISTF-reference-architecture/blob/main/guidance/FLASH-PASS.md):
- * the card appears on the presenting screen and in consent sheets, so it shows only the document
- * type and its provider, with no name, portrait or other identifying information. Every document
- * shares one design, a background with three rolling hills, and each type has its own pairing of
- * navy, teal and white so it can be told apart at a glance. The title always names the type, so
- * color is never the only cue.
+ * Every document shares the Photo ID's design: a dark background with three see-through rolling
+ * hills, the title naming the type, "Validatopia" under it and a "Powered by" credit on the
+ * nearest hill. Each type has its own pairing of navy, teal and green so it can be told apart at
+ * a glance; the title always names the type, so color is never the only cue.
+ *
+ * At the bottom left the card shows the holder's shortened name ("Claudia H."), from
+ * [holderShortName]. This is a deliberate departure from the NZ DISTF "flash pass" guidance
+ * (https://github.com/nz-trust-framework/DISTF-reference-architecture/blob/main/guidance/FLASH-PASS.md),
+ * which asks for no identifying information on a card that appears on presenting screens and
+ * consent sheets. Documents that carry no name, like the Age Verification, show none.
  */
 object ValidatopiaCardArt {
     private const val WHITE = "#FFFFFF"
 
-    /** Hill opacities, far to near. The nearest is opaque: the white "Powered by" credit sits on it. */
-    val hillAlphas: List<Double> = listOf(0.22, 0.45, 1.0)
+    /** Hill opacities, far to near. */
+    val hillAlphas: List<Double> = listOf(0.22, 0.40, 0.70)
 
     /** The "Powered by" credit and Valid8 logo are white, on the nearest hill. */
     const val CREDIT = WHITE
@@ -51,11 +55,12 @@ object ValidatopiaCardArt {
         titleLead = "Photo ",
         titleEmphasis = "ID",
         background = ValidatopiaColors.NAVY,
-        hills = ValidatopiaColors.TEAL,
+        hills = ValidatopiaColors.GREEN,
         title = WHITE,
-        subtitle = WHITE,
+        subtitle = ValidatopiaColors.GREEN,
     )
 
+    // On the other backgrounds the hill color is too faint for the subtitle (under 4.5:1), so it's white.
     val driverLicence = CardArtStyle(
         titleLead = "Driver ",
         titleEmphasis = "Licence",
@@ -68,19 +73,19 @@ object ValidatopiaCardArt {
     val gymMembership = CardArtStyle(
         titleLead = "Gym ",
         titleEmphasis = "Membership",
-        background = WHITE,
+        background = ValidatopiaColors.NAVY,
         hills = ValidatopiaColors.TEAL,
-        title = ValidatopiaColors.NAVY,
-        subtitle = ValidatopiaColors.TEAL,
+        title = WHITE,
+        subtitle = WHITE,
     )
 
     val ageVerification = CardArtStyle(
         titleLead = "Age ",
         titleEmphasis = "Verification",
-        background = WHITE,
-        hills = ValidatopiaColors.NAVY,
-        title = ValidatopiaColors.NAVY,
-        subtitle = ValidatopiaColors.NAVY,
+        background = ValidatopiaColors.TEAL,
+        hills = ValidatopiaColors.GREEN,
+        title = WHITE,
+        subtitle = WHITE,
     )
 
     /** For a document whose type isn't known yet, e.g. before its credentials are created. */
@@ -88,9 +93,9 @@ object ValidatopiaCardArt {
         titleLead = "",
         titleEmphasis = "Document",
         background = ValidatopiaColors.NAVY,
-        hills = ValidatopiaColors.TEAL,
+        hills = ValidatopiaColors.GREEN,
         title = WHITE,
-        subtitle = WHITE,
+        subtitle = ValidatopiaColors.GREEN,
     )
 
     /** Every style, for checking them all. */
@@ -111,4 +116,35 @@ object ValidatopiaCardArt {
      */
     suspend fun styleFor(document: Document): CardArtStyle =
         styleFor(document.getCredentials().filterIsInstance<MdocCredential>().firstOrNull()?.docType)
+
+    /**
+     * The holder's shortened name for [document]'s card, from the `given_name` and `family_name`
+     * of its first certified mdoc credential, or `null` if it has none yet or carries no name.
+     */
+    suspend fun holderShortName(document: Document): String? {
+        val credential = document.getCertifiedCredentials().filterIsInstance<MdocCredential>().firstOrNull()
+            ?: return null
+        for (elements in credential.issuerNamespaces.data.values) {
+            val givenName = (elements["given_name"]?.dataElementValue as? Tstr)?.value ?: continue
+            val familyName = (elements["family_name"]?.dataElementValue as? Tstr)?.value
+            return shortName(givenName, familyName)
+        }
+        return null
+    }
+
+    /**
+     * The first given name and the family name's initial, as in "Claudia H.". Names in capitals
+     * (as read from a passport's MRZ) are shown in title case.
+     */
+    fun shortName(givenName: String, familyName: String?): String? {
+        val first = givenName.trim().split(Regex("\\s+")).first().toDisplayCase()
+        if (first.isEmpty()) {
+            return null
+        }
+        val initial = familyName?.trim()?.firstOrNull()?.uppercaseChar() ?: return first
+        return "$first $initial."
+    }
+
+    private fun String.toDisplayCase(): String =
+        if (this == uppercase()) lowercase().replaceFirstChar { it.uppercaseChar() } else this
 }

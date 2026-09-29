@@ -21,6 +21,9 @@ struct HomeView: View {
                     DocumentCardButton(documentInfo: documentInfo) {
                         path.append(.document(documentInfo.identifier))
                     }
+                    // `DocumentInfo` equality only compares the document identifier, so without
+                    // this SwiftUI keeps showing a card's old art after it's repainted.
+                    .id(ObjectIdentifier(documentInfo.cardArt))
                 }
                 IssuanceStatus(state: model.issuanceState) { model.issuance.dismissFailure() }
                 Text("To share, open a document and show its code to the verifier.")
@@ -42,8 +45,8 @@ struct HomeView: View {
     }
 }
 
-/// A document card with its caption. The card art carries no identifying information (NZ DISTF
-/// flash pass guidance); only the caption says whose document it is.
+/// A document card with its caption. The card art shows only the holder's shortened name; the
+/// caption gives the full title.
 struct DocumentCardButton: View {
     let documentInfo: DocumentInfo
     let action: () -> Void

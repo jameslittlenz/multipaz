@@ -28,5 +28,5 @@ private class WalletBranding(
 
     // The issuer supplies no card art, so every document is drawn here, in its type's colors.
     override suspend fun renderFallbackCardArt(document: Document): ImageBitmap =
-        cardArt.image(ValidatopiaCardArt.styleFor(document))
+        cardArt.image(ValidatopiaCardArt.styleFor(document), ValidatopiaCardArt.holderShortName(document))
 }

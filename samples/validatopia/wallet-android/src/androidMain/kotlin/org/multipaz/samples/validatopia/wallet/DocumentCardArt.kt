@@ -29,9 +29,9 @@ import org.multipaz.samples.validatopia.shared.R as SharedR
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Validatopia card art, drawn on the device because the issuer doesn't supply any: one design for
- * every document, in the colors [ValidatopiaCardArt] gives its type. See [ValidatopiaCardArt] for
- * how it follows the NZ DISTF "flash pass" guidance: nothing on it identifies the holder.
+ * Validatopia card art, drawn on the device because the issuer doesn't supply any: the Photo ID's
+ * design for every document, in the colors [ValidatopiaCardArt] gives its type, with the holder's
+ * shortened name when the document carries one (see [ValidatopiaCardArt]).
  */
 internal class DocumentCardArt(private val context: Context) {
     private val textMeasurer by lazy {
@@ -46,12 +46,13 @@ internal class DocumentCardArt(private val context: Context) {
         BitmapFactory.decodeResource(context.resources, SharedR.drawable.valid8_advisory_logo_white).asImageBitmap()
     }
 
-    private val images = ConcurrentHashMap<CardArtStyle, ImageBitmap>()
+    private val images = ConcurrentHashMap<Pair<CardArtStyle, String?>, ImageBitmap>()
 
-    /** The art for every document of [style]'s type: nothing on it identifies the holder. */
-    fun image(style: CardArtStyle): ImageBitmap = images.getOrPut(style) { render(style) }
+    /** The art for a document of [style]'s type held by [holderName] ("Claudia H."), if known. */
+    fun image(style: CardArtStyle, holderName: String?): ImageBitmap =
+        images.getOrPut(style to holderName) { render(style, holderName) }
 
-    private fun render(style: CardArtStyle): ImageBitmap {
+    private fun render(style: CardArtStyle, holderName: String?): ImageBitmap {
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         val hills = style.hills.toColor()
         val w = WIDTH.toFloat()
@@ -65,7 +66,7 @@ internal class DocumentCardArt(private val context: Context) {
         ) {
             drawRect(style.background.toColor())
 
-            // Three rolling hills, far to near, the nearest opaque.
+            // Three rolling hills, far to near, in deepening tints.
             for ((index, alpha) in ValidatopiaCardArt.hillAlphas.withIndex()) {
                 val top = h * (0.50f + index * 0.12f)
                 val hill = Path().apply {
@@ -94,10 +95,19 @@ internal class DocumentCardArt(private val context: Context) {
                 style = TextStyle(fontSize = 30.sp, color = style.subtitle.toColor(), fontWeight = FontWeight.SemiBold),
             )
 
-            // Provider credit, bottom right, on the nearest hill.
+            // Provider credit, bottom right, on the darkest hill.
             val logoWidth = 250f
             val logoHeight = logoWidth * logo.height / logo.width
-            val logoTopLeft = Offset(w - logoWidth - 48f, h - logoHeight - 44f)
+            val logoTopLeft = Offset(w - logoWidth - 48f, h - logoHeight - BOTTOM_MARGIN)
+
+            // The holder's name, bottom left, level with the bottom of the logo.
+            if (holderName != null) {
+                val name = textMeasurer.measure(
+                    text = holderName,
+                    style = TextStyle(fontSize = 54.sp, color = style.title.toColor()),
+                )
+                drawText(name, topLeft = Offset(58f, h - BOTTOM_MARGIN - name.size.height))
+            }
             drawText(
                 textMeasurer = textMeasurer,
                 text = "Powered by",
@@ -119,5 +129,6 @@ internal class DocumentCardArt(private val context: Context) {
         // ISO/IEC 7810 ID-1 aspect ratio (85.60 × 53.98 mm), a familiar wallet-card shape.
         const val WIDTH = 1012
         const val HEIGHT = 638
+        const val BOTTOM_MARGIN = 44f
     }
 }

@@ -51,8 +51,8 @@ object ValidatopiaColors {
     const val GREEN = "#4EBC7D"
 
     /**
-     * The card-art teal, paired with [NAVY] and white in the document card art (see
-     * [ValidatopiaCardArt]). White on teal, and teal on white, are both 5:1.
+     * The card-art teal, paired with [NAVY] and [GREEN] in the document card art (see
+     * [ValidatopiaCardArt]). White on teal is 5:1.
      */
     const val TEAL = "#0E7C7B"
 

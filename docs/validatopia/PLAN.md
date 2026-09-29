@@ -276,7 +276,7 @@ Extends the existing plain HTML/JS in `multipaz-openid4vci/src/main/resources/re
 
 **Branding and design**
 - **Validatopia design tokens:** a primary colour and tonal palette, typography scale, logo and credential card art. Colour pairs are checked for contrast (4.5:1 for text, 3:1 for UI).
-- **Card art** is drawn on the device from `ValidatopiaCardArt`: one design (three rolling hills, the nearest opaque under the white "Powered by" credit) with a colour pairing per document type: Photo ID navy background with teal hills, Driver Licence teal with navy, Gym Membership white with teal, Age Verification white with navy. The title always names the type, so colour is never the only cue.
+- **Card art** is drawn on the device from `ValidatopiaCardArt`, in the Photo ID's design (a dark background, three see-through rolling hills, "Validatopia" under the title, a "Powered by" credit) with a colour pairing per document type: Photo ID navy with green hills, Driver Licence teal with navy, Gym Membership navy with teal, Age Verification teal with green. The title always names the type, so colour is never the only cue. The card shows the holder's shortened name ("Claudia H.") when the document carries a name, a deliberate departure from the DISTF flash pass guidance; the Age Verification card shows none.
 - **Android:** Material 3 components; dynamic colour is off to keep the branding.
 - **iOS:** NavigationStack, SF Symbols, system materials.
 

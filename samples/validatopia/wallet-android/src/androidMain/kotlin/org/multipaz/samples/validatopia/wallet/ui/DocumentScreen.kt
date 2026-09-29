@@ -34,8 +34,8 @@ import org.multipaz.samples.validatopia.wallet.WalletModel
 
 /**
  * The presenting screen for one document, following the NZ DISTF "flash pass" guidance: it shows
- * how to share (tap a reader, or show a code), and a card with no identifying information. The
- * holder's own details are a separate viewing screen, clearly marked as not for sharing.
+ * how to share (tap a reader, or show a code), and a card showing only the holder's shortened
+ * name. The holder's own details are a separate viewing screen, clearly marked as not for sharing.
  */
 @Composable
 fun DocumentScreen(

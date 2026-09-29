@@ -131,8 +131,7 @@ private fun DocumentCard(documentInfo: DocumentInfo, onClick: () -> Unit) {
                 contentScale = ContentScale.FillWidth,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
             )
-            // The card itself carries no identifying information (NZ DISTF flash pass guidance);
-            // only this caption says whose document it is.
+            // The card shows only the holder's shortened name; this caption gives the full title.
             Text(
                 text = name,
                 style = MaterialTheme.typography.bodyLarge,
