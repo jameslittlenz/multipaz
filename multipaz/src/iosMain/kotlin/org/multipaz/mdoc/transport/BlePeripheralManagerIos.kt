@@ -176,7 +176,7 @@ internal class BlePeripheralManagerIos: BlePeripheralManager {
                 if (peripheralManager.state == CBPeripheralManagerStatePoweredOn) {
                     resumeWait()
                 } else {
-                    resumeWaitWithException(IllegalStateException("Excepted poweredOn, got ${peripheralManager.state}"))
+                    resumeWaitWithException(IllegalStateException(bluetoothUnavailableMessage(peripheralManager.state)))
                 }
             }
         }
@@ -310,10 +310,15 @@ internal class BlePeripheralManagerIos: BlePeripheralManager {
     }
 
     override suspend fun waitForPowerOn() {
-        if (peripheralManager.state != CBPeripheralManagerStatePoweredOn) {
-            suspendCancellableCoroutine<Boolean> { continuation ->
-                setWaitCondition(WaitState.POWER_ON, continuation)
-            }
+        val state = peripheralManager.state
+        if (state == CBPeripheralManagerStatePoweredOn) {
+            return
+        }
+        // A settled state (off, not allowed, unsupported) sends no further update, so waiting for
+        // one would never end.
+        check(isBluetoothStateTransient(state)) { bluetoothUnavailableMessage(state) }
+        suspendCancellableCoroutine<Boolean> { continuation ->
+            setWaitCondition(WaitState.POWER_ON, continuation)
         }
     }
 

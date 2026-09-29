@@ -331,7 +331,7 @@ internal class BleCentralManagerIos : BleCentralManager {
                 if (centralManager.state == CBCentralManagerStatePoweredOn) {
                     resumeWait()
                 } else {
-                    resumeWaitWithException(IllegalStateException("Excepted poweredOn, got ${centralManager.state}"))
+                    resumeWaitWithException(IllegalStateException(bluetoothUnavailableMessage(centralManager.state)))
                 }
             } else {
                 Logger.w(TAG, "CBCentralManagerDelegate didUpdateState callback but not waiting")
@@ -394,10 +394,15 @@ internal class BleCentralManagerIos : BleCentralManager {
     }
 
     override suspend fun waitForPowerOn() {
-        if (centralManager.state != CBCentralManagerStatePoweredOn) {
-            suspendCancellableCoroutine<Boolean> { continuation ->
-                setWaitCondition(WaitState.POWER_ON, continuation)
-            }
+        val state = centralManager.state
+        if (state == CBCentralManagerStatePoweredOn) {
+            return
+        }
+        // A settled state (off, not allowed, unsupported) sends no further update, so waiting for
+        // one would never end.
+        check(isBluetoothStateTransient(state)) { bluetoothUnavailableMessage(state) }
+        suspendCancellableCoroutine<Boolean> { continuation ->
+            setWaitCondition(WaitState.POWER_ON, continuation)
         }
     }
 

@@ -1,6 +1,8 @@
 package org.multipaz.mdoc.transport
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import org.multipaz.crypto.EcPublicKey
 import org.multipaz.mdoc.connectionmethod.MdocConnectionMethod
 import org.multipaz.util.Logger
@@ -18,25 +20,37 @@ private const val TAG = "connectionHelper"
  *
  * For each [MdocConnectionMethod] this creates a [MdocTransport] which is advertised and opened.
  *
+ * If any transport fails to advertise, the ones already advertising are closed.
+ *
  * @param role the role to use when creating connections.
  * @param transportFactory the [MdocTransportFactory] used to create [MdocTransport] instances.
  * @param options the [MdocTransportOptions] to use when creating [MdocTransport] instances.
  * @return a list of [MdocTransport] methods that are being advertised.
+ * @throws MdocTransportException if a transport can't be advertised, for example because Bluetooth
+ *   is off, not allowed or not supported.
  */
+@Throws(MdocTransportException::class, CancellationException::class)
 suspend fun List<MdocConnectionMethod>.advertise(
     role: MdocRole,
     transportFactory: MdocTransportFactory,
     options: MdocTransportOptions
 ): List<MdocTransport> {
     val transports = mutableListOf<MdocTransport>()
-    for (connectionMethod in this) {
-        val transport = transportFactory.createTransport(
-            connectionMethod,
-            role,
-            options
-        )
-        transport.advertise()
-        transports.add(transport)
+    try {
+        for (connectionMethod in this) {
+            val transport = transportFactory.createTransport(
+                connectionMethod,
+                role,
+                options
+            )
+            transports.add(transport)
+            transport.advertise()
+        }
+    } catch (error: Exception) {
+        withContext(NonCancellable) {
+            transports.forEach { it.close() }
+        }
+        throw error
     }
     return transports
 }
@@ -52,7 +66,10 @@ suspend fun List<MdocConnectionMethod>.advertise(
  *   if using reverse engagement.
  * @return the [MdocTransport] a remote peer connected to, will be in [MdocTransport.State.CONNECTING]
  *   or [MdocTransport.State.CONNECTED] state.
+ * @throws IllegalStateException if a transport isn't advertising or idle, or every transport failed
+ *   or closed without a peer connecting.
  */
+@Throws(IllegalStateException::class, CancellationException::class)
 suspend fun List<MdocTransport>.waitForConnection(
     eSenderKey: EcPublicKey
 ): MdocTransport {
