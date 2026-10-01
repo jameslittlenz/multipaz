@@ -3,6 +3,7 @@ package org.multipaz.samples.validatopia.shared.trust
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.X509Cert
 import org.multipaz.idv.pa.CscaStore
+import org.multipaz.idv.pa.IcaoCscaCertificates
 import org.multipaz.request.Requester
 import org.multipaz.request.TrustedRequesterIdentity
 import org.multipaz.trustmanagement.ConfigurableTrustManager
@@ -11,10 +12,9 @@ import org.multipaz.trustmanagement.TrustManagerInterface
 import org.multipaz.trustmanagement.TrustMetadata
 
 /**
- * The bundled trust stores for the Validatopia apps, all built from [ValidatopiaTestPki] and all
- * marked TEST ([TrustMetadata.testOnly]).
- *
- * Importing ICAO master lists is not supported; the only CSCA is the Validatopia Test CSCA.
+ * The bundled trust stores for the Validatopia apps. The IACA, reader root and Test CSCA come from
+ * [ValidatopiaTestPki] and are TEST keys ([TrustMetadata.testOnly]). The CSCA store also holds the
+ * real passport CSCAs in [IcaoCscaCertificates].
  */
 object ValidatopiaTrust {
     /** Display name of the Photo ID issuer, as shown in the verifier's "Credential issuer" panel. */
@@ -56,8 +56,11 @@ object ValidatopiaTrust {
         )
     )
 
-    /** The CSCA store used for cross-border passive authentication (verifier side). */
-    fun createCscaStore(): CscaStore = CscaStore.from(listOf(testCscaCertificate))
+    /**
+     * The CSCA store used for cross-border passive authentication (verifier side): the Validatopia
+     * Test CSCA and the real CSCAs in [IcaoCscaCertificates].
+     */
+    fun createCscaStore(): CscaStore = CscaStore.from(listOf(testCscaCertificate) + IcaoCscaCertificates.certificates)
 
     /**
      * Resolves who is asking, for the wallet's consent sheet: the first of [requester]'s

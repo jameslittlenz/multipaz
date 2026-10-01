@@ -35,6 +35,7 @@ This reflects multipaz's encoding of the standard and should be cross-checked ag
 
 ### Target passports: New Zealand (NZL) and Australia (AUS)
 - **Trust:** the default CSCA store in both the server and the verifier contains the **NZL and AUS CSCA certificates**, plus the Validatopia Test CSCA.
+  - **Done (2026-10-01):** `IcaoCscaCertificates` in `multipaz-idv` bundles the unexpired CSCAs for NZ, AU, US, CA, GB, KR and JP (52 certificates, link certificates included) from ICAO PKD download `icaopkd-002-complete-535`. Every master list's CMS signature was checked; 15 of the 28 also chained to their publisher's CSCA under OpenSSL, which rejects the explicit EC parameters the rest use. All but one certificate is carried by at least one of those 15. The download had no Fijian CSCA. `multipaz-idv/scripts/icao_csca_bundle.py` regenerates the file.
   - Sources:
     - The **ICAO Master List** (https://www.icao.int/icao-pkd/icao-master-list), plus PKD document signer certificates and CRLs (https://download.pkd.icao.int/). This is the primary source for both countries.
     - **AU direct:** the Australian Passport Office page (https://www.passports.gov.au/help/australian-country-signing-certificate-authority-csca), which lists the DER files and the CRL. The subject is `CN=Passport Country Signing Authority, OU=APO, OU=DFAT, O=GOV, C=AU`.
@@ -468,7 +469,7 @@ This only works when `admin` is the sole account, because bootstrap runs only wh
 ## Open questions / risks
 - The Validatopia codes: proposed alpha-2 `XV` and alpha-3 `XVA`, from the ISO user-assigned range. To be confirmed.
 - **Brainpool on iOS** is the hardest crypto gap. It only matters if NZ or AU passports use brainpool, which the M1 discovery task settles. Until it's done, those passports degrade gracefully to "unsupported on device".
-- Getting current NZ and AU CSCA certificates, including rollover and the terms for redistributing them in the apps.
+- Keeping the bundled CSCA certificates current through rollovers, and the terms for redistributing them in the apps.
 - NFCPassportReader depends on OpenSSL through SPM. JMRTD and scuba are LGPL, used only in the Android wallet as unmodified jars, with a NOTICE file.
 - Face-model accuracy and demographic bias need calibration. Avoid ArcFace/InsightFace weights, which are licensed for non-commercial use only.
 - IsoDep timeouts on long DG2 reads, and clashes between BouncyCastle and Android's own copy of it.

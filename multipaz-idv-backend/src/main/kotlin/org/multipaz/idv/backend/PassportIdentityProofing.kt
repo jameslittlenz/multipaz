@@ -10,6 +10,7 @@ import org.multipaz.cbor.buildCborMap
 import org.multipaz.cbor.putCborMap
 import org.multipaz.cbor.toDataItemFullDate
 import org.multipaz.crypto.Crypto
+import org.multipaz.crypto.X509Cert
 import org.multipaz.idv.IcaoCountryCodes
 import org.multipaz.idv.backend.audit.AdminAuditRecord
 import org.multipaz.idv.backend.audit.IssuanceAuditRecord
@@ -32,6 +33,7 @@ import org.multipaz.idv.mrz.MrzException
 import org.multipaz.idv.mrz.MrzSex
 import org.multipaz.idv.mrz.MrzTd3
 import org.multipaz.idv.pa.CscaStore
+import org.multipaz.idv.pa.IcaoCscaCertificates
 import org.multipaz.idv.pa.PassiveAuthenticationFlag
 import org.multipaz.idv.pa.PassiveAuthenticator
 import org.multipaz.idv.synthetic.SyntheticPassportFactory
@@ -225,7 +227,7 @@ class PassportIdentityProofing(
         IssuanceAuditRecord.list(afterId, limit).map { (id, record) -> record.toEntry(id) }
 
     override suspend fun listTrustedCsca(): List<TrustedCscaInfo> =
-        listOf(UploadedCscaStore.toInfo(testCsca.cscaCertificate, builtIn = true)) +
+        builtInCscas().map { UploadedCscaStore.toInfo(it, builtIn = true) } +
             UploadedCscaStore.list().map { UploadedCscaStore.toInfo(it, builtIn = false) }
 
     override suspend fun uploadTrustedCsca(pem: String): List<TrustedCscaInfo> {
@@ -234,8 +236,8 @@ class PassportIdentityProofing(
     }
 
     override suspend fun deleteTrustedCsca(fingerprintSha256Hex: String) {
-        if (fingerprintSha256Hex.equals(UploadedCscaStore.fingerprint(testCsca.cscaCertificate), ignoreCase = true)) {
-            throw InvalidRequestException("The built-in Validatopia Test CSCA can't be deleted")
+        if (builtInCscas().any { fingerprintSha256Hex.equals(UploadedCscaStore.fingerprint(it), ignoreCase = true) }) {
+            throw InvalidRequestException("Built-in CSCAs can't be deleted")
         }
         UploadedCscaStore.delete(fingerprintSha256Hex)
     }
@@ -247,14 +249,10 @@ class PassportIdentityProofing(
         return store.list().map { PersonaSummary(it.id, it.givenName, it.familyName) }
     }
 
-    private suspend fun combinedCscaStore(): CscaStore {
-        val uploaded = UploadedCscaStore.list()
-        return if (uploaded.isEmpty()) {
-            testCsca.cscaStore
-        } else {
-            CscaStore.from(listOf(testCsca.cscaCertificate) + uploaded)
-        }
-    }
+    /** The Validatopia Test CSCA and the real passport CSCAs in [IcaoCscaCertificates]. */
+    private fun builtInCscas(): List<X509Cert> = listOf(testCsca.cscaCertificate) + IcaoCscaCertificates.certificates
+
+    private suspend fun combinedCscaStore(): CscaStore = CscaStore.from(builtInCscas() + UploadedCscaStore.list())
 
     private suspend fun activePersonaStore(): PersonaStore = PersonaStorePersistence.load() ?: personaStore
 

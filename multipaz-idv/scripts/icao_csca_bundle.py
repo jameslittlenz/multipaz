@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Generates IcaoCscaCertificates.kt from an ICAO PKD master list download.
+
+Usage:
+    multipaz-idv/scripts/icao_csca_bundle.py icaopkd-002-complete-NNN.ldif NZ AU US ...
+
+Reads every master list in the LDIF (each a CMS SignedData holding a CscaMasterList), skips any
+whose signature doesn't verify, and keeps the unexpired CSCA certificates whose subject country is
+one of those given. Certificates are deduplicated by their DER encoding. Needs only Python 3 and
+the openssl command.
+
+The master lists' signer chains aren't checked here: OpenSSL 3 rejects the explicit EC parameters
+many CSCAs use. Each certificate kept is listed with the countries whose master lists carry it.
+"""
+
+import base64
+import datetime
+import hashlib
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+OUTPUT = os.path.join(
+    os.path.dirname(__file__), "..", "src", "commonMain", "kotlin", "org", "multipaz", "idv", "pa",
+    "IcaoCscaCertificates.kt",
+)
+
+
+def read_tlv(data, offset):
+    """Returns (content start, content length) of the DER element at offset."""
+    length = data[offset + 1]
+    offset += 2
+    if length & 0x80:
+        count = length & 0x7F
+        length = int.from_bytes(data[offset:offset + count], "big")
+        offset += count
+    return offset, length
+
+
+def master_list_certificates(cms_der, workdir):
+    """The DER certificates in a master list, or None if its CMS signature doesn't verify."""
+    cms_path = os.path.join(workdir, "ml.der")
+    content_path = os.path.join(workdir, "ml.content")
+    with open(cms_path, "wb") as f:
+        f.write(cms_der)
+    result = subprocess.run(
+        ["openssl", "cms", "-verify", "-noverify", "-inform", "DER", "-binary",
+         "-in", cms_path, "-out", content_path],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return None
+    with open(content_path, "rb") as f:
+        content = f.read()
+    # CscaMasterList ::= SEQUENCE { version INTEGER, certList SET OF Certificate }
+    start, _ = read_tlv(content, 0)
+    version_start, version_length = read_tlv(content, start)
+    set_start, set_length = read_tlv(content, version_start + version_length)
+    certificates = []
+    offset = set_start
+    while offset < set_start + set_length:
+        cert_start, cert_length = read_tlv(content, offset)
+        certificates.append(content[offset:cert_start + cert_length])
+        offset = cert_start + cert_length
+    return certificates
+
+
+def describe(cert_der):
+    """(subject country, subject, notAfter, PEM) for a DER certificate."""
+    pem = subprocess.run(
+        ["openssl", "x509", "-inform", "DER"], input=cert_der, capture_output=True, check=True
+    ).stdout.decode()
+    text = subprocess.run(
+        ["openssl", "x509", "-noout", "-subject", "-enddate", "-nameopt", "RFC2253"],
+        input=pem.encode(), capture_output=True, check=True,
+    ).stdout.decode()
+    subject = re.search(r"^subject=(.*)$", text, re.M).group(1)
+    country = re.search(r"(?:^|,)C=([A-Za-z]{2})(?:,|$)", subject)
+    not_after = datetime.datetime.strptime(
+        re.search(r"notAfter=(.*)$", text, re.M).group(1), "%b %d %H:%M:%S %Y %Z"
+    )
+    return (country.group(1).upper() if country else None), subject, not_after, pem
+
+
+def main():
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    ldif_path, countries = sys.argv[1], [c.upper() for c in sys.argv[2:]]
+    with open(ldif_path) as f:
+        ldif = f.read().replace("\n ", "")  # Unfold LDIF continuation lines.
+
+    publishers_by_cert = {}
+    with tempfile.TemporaryDirectory() as workdir:
+        for entry in ldif.split("\n\n"):
+            content = re.search(r"^pkdMasterListContent;binary:: (\S+)", entry, re.M)
+            if not content:
+                continue
+            publisher = re.search(r"o=ml,c=([A-Z]+)", entry).group(1)
+            certificates = master_list_certificates(base64.b64decode(content.group(1)), workdir)
+            if certificates is None:
+                print(f"Skipping {publisher}'s master list: its signature doesn't verify", file=sys.stderr)
+                continue
+            for cert in certificates:
+                publishers_by_cert.setdefault(cert, set()).add(publisher)
+
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    kept = []
+    for cert, publishers in publishers_by_cert.items():
+        country, subject, not_after, pem = describe(cert)
+        if country in countries and not_after > now:
+            kept.append((countries.index(country), not_after, country, subject, pem, sorted(publishers), cert))
+    kept.sort(key=lambda k: (k[0], k[1], hashlib.sha256(k[6]).hexdigest()))
+
+    found = sorted({k[2] for k in kept}, key=countries.index)
+    missing = [c for c in countries if c not in found]
+    source = os.path.splitext(os.path.basename(ldif_path))[0]
+    lines = [
+        f"// Generated by multipaz-idv/scripts/icao_csca_bundle.py from {source}.ldif on {now.date()}.",
+        "// Don't edit by hand: rerun the script with a newer download to update it.",
+        "package org.multipaz.idv.pa",
+        "",
+        "import org.multipaz.crypto.X509Cert",
+        "",
+        "/**",
+        f" * Real CSCA certificates for {', '.join(found)}, taken from the ICAO PKD master list download",
+        f" * `{source}`. Only certificates unexpired when it was generated are included.",
+    ]
+    if missing:
+        lines.append(f" * The download had none for {', '.join(missing)}.")
+    lines += [
+        " */",
+        "object IcaoCscaCertificates {",
+        "    /** The ICAO PKD download these certificates came from. */",
+        f'    const val SOURCE = "{source}"',
+        "",
+        "    /** The certificates, parsed on first use. */",
+        "    val certificates: List<X509Cert> by lazy { PEMS.map { X509Cert.fromPem(it) } }",
+        "",
+        "    private val PEMS = listOf(",
+    ]
+    for _, not_after, country, subject, pem, publishers, cert in kept:
+        lines.append(f"        // {country}: {subject}")
+        lines.append(f"        // Valid until {not_after.date()}. In master lists from {', '.join(publishers)}.")
+        lines.append(f"        // SHA-256 {hashlib.sha256(cert).hexdigest()}")
+        lines.append('        """')
+        lines += pem.strip().splitlines()
+        lines.append('""",')
+    lines += ["    )", "}", ""]
+    with open(OUTPUT, "w") as f:
+        f.write("\n".join(lines))
+    print(f"Wrote {len(kept)} certificates for {', '.join(found)} to {os.path.normpath(OUTPUT)}")
+    if missing:
+        print(f"None found for {', '.join(missing)}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

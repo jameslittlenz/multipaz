@@ -15,7 +15,10 @@ identity) path.
 | `ios-config/` | Xcode build settings shared by both iOS apps, plus the template for your local ones |
 
 Trust anchors (IACA, test CSCA, reader root) are fixed TEST keys shared by every deployment. See
-`multipaz-server-deployment/validatopia-test-keys/README.md`.
+`multipaz-server-deployment/validatopia-test-keys/README.md`. The verifier and the issuer also trust
+real passport CSCAs for NZ, AU, US, CA, GB, KR and JP, from the ICAO PKD master lists (see
+`IcaoCscaCertificates` in `multipaz-idv`). To refresh them from a newer download, run
+`multipaz-idv/scripts/icao_csca_bundle.py <download>.ldif NZ AU US CA GB KR JP`.
 
 ## Running locally
 

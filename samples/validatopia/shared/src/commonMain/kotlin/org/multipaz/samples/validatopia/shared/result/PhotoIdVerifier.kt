@@ -266,12 +266,12 @@ class PhotoIdVerifier(
                         TrustCheck("Passport issuer", CheckOutcome.FAILED, "Document Signer doesn't chain to the CSCA")
                     PassiveAuthenticationFlag.ALGORITHM_UNSUPPORTED_ON_DEVICE in flags ->
                         TrustCheck("Passport issuer", CheckOutcome.UNKNOWN, "Algorithm not supported on this device")
-                    else -> TrustCheck(
+                    pa.documentSignerCertificate?.issuer == ValidatopiaTrust.testCscaCertificate.subject -> TrustCheck(
                         "Passport issuer",
-                        // Only the Validatopia Test CSCA is bundled, so a trusted chain is always TEST.
                         CheckOutcome.WARNING,
                         "${check.cscaSubject ?: "Trusted CSCA"} (TEST: not a real passport issuer)"
                     )
+                    else -> TrustCheck("Passport issuer", CheckOutcome.PASSED, check.cscaSubject ?: "Trusted CSCA")
                 }
             )
             add(
