@@ -1,0 +1,76 @@
+package org.multipaz.crypto
+
+import kotlinx.coroutines.test.runTest
+import kotlinx.io.bytestring.ByteString
+import org.multipaz.testUtilSetupCryptoProvider
+import org.multipaz.util.fromHex
+import org.multipaz.util.toHex
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+/** Certificates whose EC key gives the curve as explicit parameters rather than a named-curve OID. */
+class ExplicitEcParametersTests {
+    @BeforeTest
+    fun setup() = testUtilSetupCryptoProvider()
+
+    // New Zealand's passport CSCA (self-signed, valid until 2034), from the ICAO PKD master lists.
+    // Its key is on P-384, with the curve spelled out in explicit parameters.
+    private val cert = X509Cert.fromPem(
+        """
+-----BEGIN CERTIFICATE-----
+MIIE7jCCBHSgAwIBAgIIYH4eHvk+LzcwCgYIKoZIzj0EAwIwcjELMAkGA1UEBhMC
+TloxIjAgBgNVBAoMGUdvdmVybm1lbnQgb2YgTmV3IFplYWxhbmQxJzAlBgNVBAsM
+HklkZW50aXR5IGFuZCBQYXNzcG9ydCBTZXJ2aWNlczEWMBQGA1UEAwwNUGFzc3Bv
+cnQgQ1NDQTAeFw0yMTA0MTMwMTAzMzlaFw0zNDA4MDgwMTAzMzlaMHIxCzAJBgNV
+BAYTAk5aMSIwIAYDVQQKDBlHb3Zlcm5tZW50IG9mIE5ldyBaZWFsYW5kMScwJQYD
+VQQLDB5JZGVudGl0eSBhbmQgUGFzc3BvcnQgU2VydmljZXMxFjAUBgNVBAMMDVBh
+c3Nwb3J0IENTQ0EwggG1MIIBTQYHKoZIzj0CATCCAUACAQEwPAYHKoZIzj0BAQIx
+AP/////////////////////////////////////////+/////wAAAAAAAAAA////
+/zBkBDD//////////////////////////////////////////v////8AAAAAAAAA
+AP////wEMLMxL6fiPufkmI4Fa+P4LRkYHZxu/oFBEgMUCI9QE4daxlY5jYou0Z0q
+hcjt0+wq7wRhBKqHyiK+iwU3jrHHHvMgrXRuHTtii6ebmFn3QeCCVCo4VQLyXb9V
+KWw6VF44cnYKtzYX3kqWJixvXZ6Yv5KS3Cn49B29KJoUfOnaMRO18LjACmCxzh1+
+gZ16Qx18kOoOXwIxAP///////////////////////////////8djTYH0Ny3fWBoN
+skiwp3rs7BlqzMUpcwIBAQNiAATQDrtd7vYEUB+vkxPogSnAvSUOEL6YkuJUBFN4
+ybzOA2YrOd60NzQHz3V43av91YykBpfWJYmG1TPSLyxo8nuGwy/aq9Vp7GaY/wdO
+fmw7bPxlnD298IghhadJEXk0AzKjggGUMIIBkDASBgNVHRMBAf8ECDAGAQH/AgEA
+MB8GA1UdIwQYMBaAFJ8OLB+SWEwI5FvTDfjYAjxxc/qNMDoGA1UdEgQzMDGkEDAO
+MQwwCgYDVQQHDANOWkyGHWh0dHBzOi8vd3d3LnBhc3Nwb3J0cy5nb3Z0Lm56MFIG
+A1UdIARLMEkwRwYIYIQqZQgBAQMwOzA5BggrBgEFBQcCARYtaHR0cHM6Ly93d3cu
+cGtpLmdvdnQubnovcG9saWN5L2VQYXNzcG9ydHNfQ1BTMG0GA1UdHwRmMGQwMKAu
+oCyGKmh0dHBzOi8vcGtkZG93bmxvYWQxLmljYW8uaW50L0NSTHMvTlpMLmNybDAw
+oC6gLIYqaHR0cHM6Ly9wa2Rkb3dubG9hZDIuaWNhby5pbnQvQ1JMcy9OWkwuY3Js
+MB0GA1UdDgQWBBSfDiwfklhMCORb0w342AI8cXP6jTArBgNVHRAEJDAigA8yMDIx
+MDQxMzAxMDMzOVqBDzIwMjQwNDEyMDEwMzM5WjAOBgNVHQ8BAf8EBAMCAQYwCgYI
+KoZIzj0EAwIDaAAwZQIwZNNsVIS169AO41zOjTyeW1+p1UwHyxDYJZvJEIQYr6pw
+BDvryT0x+j9K7cRPuS+jAjEApa6OdWitf0Mt1LrqUHRGCs5uXA4WEPGBdWCYG8KV
+fMKtnb5ga7W0JqHgJ+C9cd5j
+-----END CERTIFICATE-----
+        """.trimIndent()
+    )
+
+    @Test
+    fun explicitParametersAreRecognizedAsTheirNamedCurve() {
+        val publicKey = cert.publicKey
+        assertTrue(publicKey is EcPublicKey)
+        assertEquals(EcCurve.P384, publicKey.curve)
+    }
+
+    @Test
+    fun selfSignatureVerifies() = runTest {
+        X509CertChain(listOf(cert, cert)).validate(validateValidity = false)
+    }
+
+    @Test
+    fun unknownExplicitParametersAreRejected() {
+        // Alter the curve's b coefficient, so the parameters match no supported curve.
+        val b = "b3312fa7e23ee7e4"
+        val encoded = cert.encoded.toByteArray().toHex()
+        assertTrue(encoded.contains(b))
+        val altered = X509Cert(ByteString(encoded.replace(b, "b3312fa7e23ee7e5").fromHex()))
+        assertFailsWith<IllegalStateException> { altered.publicKey }
+    }
+}

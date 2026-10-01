@@ -106,6 +106,18 @@ data class X509Cert(
         }
 
     /**
+     * Whether the public key is an EC key given with explicit curve parameters (RFC 3279 Section
+     * 2.3.5) rather than a named curve, as some passport CSCA certificates are.
+     */
+    internal val hasExplicitEcParameters: Boolean
+        get() {
+            val subjectPublicKeyInfo = tbsCert.elements[6] as ASN1Sequence
+            val algorithmIdentifier = subjectPublicKeyInfo.elements[0] as ASN1Sequence
+            return (algorithmIdentifier.elements[0] as ASN1ObjectIdentifier).oid == OID.EC_PUBLIC_KEY.oid &&
+                algorithmIdentifier.elements.getOrNull(1) is ASN1Sequence
+        }
+
+    /**
      * The public key in the certificate, as an Elliptic Curve key.
      *
      * Note that this is only supported for curves in [Crypto.supportedCurves].
@@ -121,7 +133,16 @@ data class X509Cert(
             val curve = when (algorithmOid) {
                 // https://datatracker.ietf.org/doc/html/rfc5480#section-2.1.1
                 OID.EC_PUBLIC_KEY.oid -> {
-                    val ecCurveString = (algorithmIdentifier.elements[1] as ASN1ObjectIdentifier).oid
+                    val parameters = algorithmIdentifier.elements[1]
+                    if (parameters is ASN1Sequence) {
+                        // Explicit curve parameters rather than a named curve (RFC 3279 Section
+                        // 2.3.5), as some passport CSCA certificates use.
+                        return EcPublicKeyDoubleCoordinate.fromUncompressedPointEncoding(
+                            EcExplicitCurveParameters.curveFor(parameters),
+                            (subjectPublicKeyInfo.elements[1] as ASN1BitString).value
+                        )
+                    }
+                    val ecCurveString = (parameters as ASN1ObjectIdentifier).oid
                     when (ecCurveString) {
                         "1.2.840.10045.3.1.7" -> EcCurve.P256
                         "1.3.132.0.34" -> EcCurve.P384

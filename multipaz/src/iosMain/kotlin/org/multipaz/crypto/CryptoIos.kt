@@ -3,6 +3,7 @@
 package org.multipaz.crypto
 
 import org.multipaz.SwiftBridge
+import org.multipaz.asn1.OID
 import org.multipaz.securearea.KeyLockedException
 import org.multipaz.securearea.SecureEnclaveKeyUnlockData
 import org.multipaz.util.UUID
@@ -560,6 +561,18 @@ actual object Crypto {
         val certificates = certChain.certificates
         for (i in 1..certificates.lastIndex) {
             val toVerify = certificates[i - 1]
+            if (toVerify.signatureAlgorithmOid == OID.SIGNATURE_RSASSA_PSS.oid) {
+                // The Swift bridge maps a signature algorithm from its OID alone, but RSASSA-PSS
+                // keeps its hash in the parameters, which verify() reads.
+                try {
+                    toVerify.verify(certificates[i].publicKey)
+                } catch (e: SignatureVerificationException) {
+                    return false
+                } catch (e: IllegalArgumentException) {
+                    return false
+                }
+                continue
+            }
             val err = SwiftBridge.verifySignature(
                 certificates[i].encoded.toNSData(),
                 toVerify.tbsCertificate.toNSData(),

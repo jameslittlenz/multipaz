@@ -120,7 +120,7 @@ data class X509CertChain(
         validateValidity: Boolean = true,
         validateCaValidity: Boolean = true
     ) {
-        if (!Crypto.validateCertChainSignatures(this)) {
+        if (!signaturesValid()) {
             throw X509CertChainValidationException.Signature()
         }
         var previous: X509Cert? = null
@@ -164,6 +164,27 @@ data class X509CertChain(
                 if (certificate.validityNotBefore > validateAt) {
                     throw X509CertChainValidationException.NotYetValid(certificate.validityNotBefore)
                 }
+            }
+        }
+    }
+
+    /**
+     * Whether every certificate is signed by the next. Platform X.509 libraries (the JDK's, Apple's
+     * Security framework) reject keys given with explicit EC parameters, so a chain with any is
+     * checked with the keys as Multipaz parses them.
+     */
+    private suspend fun signaturesValid(): Boolean {
+        if (certificates.none { it.hasExplicitEcParameters }) {
+            return Crypto.validateCertChainSignatures(this)
+        }
+        return certificates.zipWithNext().all { (certificate, signer) ->
+            try {
+                certificate.verify(signer.publicKey)
+                true
+            } catch (e: SignatureVerificationException) {
+                false
+            } catch (e: IllegalArgumentException) {
+                false
             }
         }
     }
