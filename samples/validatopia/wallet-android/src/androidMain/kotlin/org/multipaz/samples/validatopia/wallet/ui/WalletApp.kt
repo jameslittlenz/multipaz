@@ -24,8 +24,7 @@ private object Routes {
     const val HOME = "home"
     const val ADD = "add"
     const val SETTINGS = "settings"
-    const val DOCUMENT = "document/"
-    const val PRESENT = "present/"
+    const val SHARE = "share"
     const val DETAILS = "details/"
     const val PORTRAIT = "portrait/"
 }
@@ -76,7 +75,7 @@ fun WalletApp(model: WalletModel) {
         backend = backend,
         onFinishedProvisioning = { document, isNewlyIssued ->
             if (document != null && isNewlyIssued) {
-                resetTo(Routes.DOCUMENT + document.identifier)
+                resetTo(Routes.DETAILS + document.identifier)
             }
         },
     )
@@ -86,18 +85,12 @@ fun WalletApp(model: WalletModel) {
         route == Routes.HOME -> HomeScreen(
             model = model,
             onAddPhotoId = { push(Routes.ADD) },
-            onOpenDocument = { push(Routes.DOCUMENT + it) },
+            onOpenDocument = { push(Routes.DETAILS + it) },
+            onShare = { push(Routes.SHARE) },
             onOpenSettings = { push(Routes.SETTINGS) },
         )
         route == Routes.ADD -> AddPhotoIdScreen(model = model, onBack = ::pop)
         route == Routes.SETTINGS -> SettingsScreen(model = model, onBack = ::pop)
-        route.startsWith(Routes.DOCUMENT) -> DocumentScreen(
-            model = model,
-            documentId = route.removePrefix(Routes.DOCUMENT),
-            onBack = ::pop,
-            onShowQr = { push(Routes.PRESENT + it) },
-            onViewDetails = { push(Routes.DETAILS + it) },
-        )
         route.startsWith(Routes.DETAILS) -> MyDetailsScreen(
             model = model,
             documentId = route.removePrefix(Routes.DETAILS),
@@ -110,10 +103,6 @@ fun WalletApp(model: WalletModel) {
             documentId = route.removePrefix(Routes.PORTRAIT),
             onBack = ::pop,
         )
-        route.startsWith(Routes.PRESENT) -> PresentQrScreen(
-            model = model,
-            documentId = route.removePrefix(Routes.PRESENT),
-            onBack = ::pop,
-        )
+        route == Routes.SHARE -> ShareScreen(model = model, onBack = ::pop)
     }
 }

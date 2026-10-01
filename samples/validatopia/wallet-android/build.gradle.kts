@@ -17,6 +17,17 @@ val projectVersionName: String by rootProject.extra
 val validatopiaIssuerUrl = (project.findProperty("validatopia.issuerUrl") as String?)
     ?: "http://localhost:6000/openid4vci"
 
+// Release builds go through the attested wallet back-end, which only admits apps on its allow-list.
+// -Pvalidatopia.releaseDevAttestation=true makes them sign wallet attestations in-app with the
+// public development identity instead, like debug builds: for handing out a demo build without
+// changing the server. Anyone can mint that identity, so the issuer can't tell the app from a copy.
+val validatopiaReleaseDevAttestation = project.findProperty("validatopia.releaseDevAttestation") == "true"
+
+// Release signing, from properties kept out of the repo (for example in ~/.gradle/gradle.properties):
+// validatopia.release.storeFile, .storePassword, .keyAlias and .keyPassword. Without them, release
+// builds are unsigned.
+val validatopiaReleaseStoreFile = project.findProperty("validatopia.release.storeFile") as String?
+
 kotlin {
     jvmToolchain(17)
 
@@ -38,6 +49,7 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 implementation(compose.ui)
+                implementation(compose.components.uiToolingPreview)
                 implementation(compose.materialIconsExtended)
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.biometrics)
@@ -47,6 +59,7 @@ kotlin {
                 implementation(libs.kotlinx.io.bytestring)
                 implementation(project(":multipaz"))
                 implementation(project(":multipaz-compose"))
+                implementation(project(":multipaz-dcapi"))
                 implementation(project(":multipaz-doctypes"))
                 implementation(project(":samples:validatopia:shared"))
             }
@@ -68,6 +81,17 @@ android {
         buildConfigField("String", "DEFAULT_ISSUER_URL", "\"$validatopiaIssuerUrl\"")
     }
 
+    signingConfigs {
+        if (validatopiaReleaseStoreFile != null) {
+            create("release") {
+                storeFile = file(validatopiaReleaseStoreFile)
+                storePassword = project.findProperty("validatopia.release.storePassword") as String?
+                keyAlias = project.findProperty("validatopia.release.keyAlias") as String?
+                keyPassword = project.findProperty("validatopia.release.keyPassword") as String?
+            }
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             // Debug builds sign wallet attestations in-app with the public development identity
@@ -75,8 +99,14 @@ android {
             buildConfigField("boolean", "USE_DEV_ATTESTATION", "true")
         }
         getByName("release") {
-            buildConfigField("boolean", "USE_DEV_ATTESTATION", "false")
+            buildConfigField("boolean", "USE_DEV_ATTESTATION", validatopiaReleaseDevAttestation.toString())
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
+    }
+
+    dependencies {
+        // Renders @Preview composables in Android Studio.
+        debugImplementation(compose.uiTooling)
     }
 
     compileOptions {

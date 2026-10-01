@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// The holder's own view of one of their documents: a "viewing" display in the sense of the NZ DISTF flash
-/// pass guidance. The warning that this screen isn't for sharing stays pinned while the details
-/// scroll. Attributes are a plain list with nothing (age, date of birth) made prominent and no
-/// document styling. The portrait isn't on this page; it opens separately on request.
+/// pass guidance, opened by tapping the document's card on the home screen. The warning that this
+/// screen isn't for sharing stays pinned while the card art and details scroll under it. Attributes
+/// are a plain list with nothing (age, date of birth) made prominent. The portrait isn't on this
+/// page; it opens separately on request.
 struct MyDetailsView: View {
     @Environment(WalletModel.self) private var model
     let documentId: String
@@ -15,12 +16,24 @@ struct MyDetailsView: View {
         let documentInfo = model.documentModel.documentInfos.first { $0.identifier == documentId }
         ValidatopiaScreen {
             if let documentInfo {
-                Text("For your own reference. To prove who you are or how old you are, share the document by showing its code.")
+                Image(uiImage: documentInfo.cardArt)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    // A faint edge, so dark cards stand out from a dark background.
+                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Brand.onBackground.opacity(0.15), lineWidth: 1))
+                    // The art's text (type, subtitle, short name) is in the image, so it's described.
+                    .accessibilityLabel("Card for \(documentInfo.document.displayName ?? "this document")")
+                Text("For your own reference. To prove who you are or how old you are, use Share on the home screen.")
                     .font(.subheadline)
                 if claimsOf(documentInfo).contains(where: { $0.isPortrait }) {
                     PortraitPlaceholder { path.append(.portrait(documentId)) }
                 }
                 StatusChip(documentInfo: documentInfo)
+                if claimsOf(documentInfo).contains(where: { $0.isPassportData }) {
+                    DtcBadge()
+                        .frame(maxWidth: .infinity)
+                }
                 DetailsList(documentInfo: documentInfo)
                 SecondaryButton(title: "Remove from this phone", role: .destructive) { confirmDelete = true }
                 if let deleteError {
@@ -31,7 +44,7 @@ struct MyDetailsView: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) { NotForSharingBanner() }
-        .navigationTitle("My details")
+        .navigationTitle(documentInfo?.document.displayName ?? "My details")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Remove this document?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
@@ -51,24 +64,29 @@ struct MyDetailsView: View {
     }
 }
 
-/// The holder's portrait, alone, behind the same warning.
+/// The holder's portrait, alone, behind the same warning: the full width of the page, centred in
+/// the space below the warning, with the card art's rounded corners.
 struct PortraitView: View {
     @Environment(WalletModel.self) private var model
     let documentId: String
 
     var body: some View {
         let documentInfo = model.documentModel.documentInfos.first { $0.identifier == documentId }
-        ValidatopiaScreen {
+        Group {
             if let image = documentInfo.flatMap(portraitImage) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     .accessibilityLabel("Your portrait")
             } else {
                 Text("No portrait to show.")
             }
         }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: 700, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .background(Brand.background.ignoresSafeArea())
         .safeAreaInset(edge: .top, spacing: 0) { NotForSharingBanner() }
         .navigationTitle("My portrait")
         .navigationBarTitleDisplayMode(.inline)
@@ -91,9 +109,9 @@ private struct NotForSharingBanner: View {
                 .font(.subheadline.bold())
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .foregroundStyle(Brand.onError)
+        .foregroundStyle(Brand.onWarningContainer)
         .padding(12)
-        .background(Brand.error, in: RoundedRectangle(cornerRadius: 8))
+        .background(Brand.warningContainer, in: RoundedRectangle(cornerRadius: 8))
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Brand.background)
@@ -126,27 +144,58 @@ private struct PortraitPlaceholder: View {
 }
 
 /// Whether the credential is currently valid, as an icon plus words.
+/// Whether the credential can be used: its dates, and the issuer's revocation list, checked afresh
+/// each time the page opens. An icon plus words, never colour alone: revoked in red; suspended,
+/// expired or not yet valid in yellow; valid in green. Until the check answers, or if it can't,
+/// only the dates count, with a line saying so.
 private struct StatusChip: View {
+    @Environment(WalletModel.self) private var model
     let documentInfo: DocumentInfo
+    @State private var revocation: RevocationCheckResult?
 
     var body: some View {
         if let credential = documentInfo.credentialInfos.first?.credential {
-            let now = Date.now
-            let from = Date(kotlinInstant: credential.validFrom)
-            let until = Date(kotlinInstant: credential.validUntil)
-            let untilText = until.formatted(date: .long, time: .omitted)
-            let (valid, text): (Bool, String) = now < from
-                ? (false, "Not yet valid")
-                : now > until ? (false, "Expired on \(untilText)") : (true, "Valid until \(untilText)")
-            let color = valid ? Brand.success : Brand.error
-            Label(text, systemImage: valid ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .font(.subheadline.bold())
-                .foregroundStyle(color)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .overlay(Capsule().stroke(color, lineWidth: 1))
-                .accessibilityElement(children: .combine)
+            let status = CredentialStatus.companion.of(
+                validFrom: credential.validFrom,
+                validUntil: credential.validUntil,
+                revocation: revocation?.state,
+                at: KotlinClockCompanion().getSystem().now()
+            )
+            let from = Date(kotlinInstant: credential.validFrom).formatted(date: .long, time: .omitted)
+            let until = Date(kotlinInstant: credential.validUntil).formatted(date: .long, time: .omitted)
+            let (text, color, icon): (String, Color, String) = switch status {
+            case .valid: ("Valid until \(until)", Brand.success, "checkmark.circle.fill")
+            case .notYetValid: ("Not valid until \(from)", Brand.warning, "exclamationmark.triangle.fill")
+            case .expired: ("Expired on \(until)", Brand.warning, "exclamationmark.triangle.fill")
+            case .suspended: ("Suspended", Brand.warning, "exclamationmark.triangle.fill")
+            case .revoked: ("Revoked", Brand.error, "xmark.octagon.fill")
+            }
+            VStack(spacing: 4) {
+                Label(text, systemImage: icon)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(color)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .overlay(Capsule().stroke(color, lineWidth: 1))
+                    .accessibilityElement(children: .combine)
+                    .announcing(revocation == nil ? nil : text)
+                if let note {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(Brand.onSurfaceVariant)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .task(id: credential.identifier) {
+                revocation = try? await model.credentialStatusChecker.check(credential: credential)
+            }
         }
+    }
+
+    private var note: String? {
+        guard let revocation else { return "Checking with the issuer…" }
+        return revocation.state == .unknown ? "Couldn't check with the issuer, so this is from the dates only." : nil
     }
 }
 
@@ -155,16 +204,27 @@ private struct DetailsList: View {
 
     var body: some View {
         let claims = claimsOf(documentInfo)
-        let passportData = claims.filter { ($0 as? MdocClaim)?.namespaceName == PhotoID.shared.DATAGROUPS_NAMESPACE }
-        let rest = claims.filter { claim in
-            !claim.isPortrait && !passportData.contains { $0 === claim }
-        }
+        let rest = claims.filter { !$0.isPortrait && !$0.isPassportData }
         let timeZone = ValidatopiaShared.TimeZone.companion.currentSystemDefault()
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(rest.enumerated()), id: \.offset) { _, claim in
+            ForEach(Array(DetailsRow.companion.of(claims: rest).enumerated()), id: \.offset) { _, row in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(claim.displayName).font(.subheadline.weight(.semibold))
-                    Text(claim.render(timeZone: timeZone))
+                    switch onEnum(of: row) {
+                    case .single(let single):
+                        let claim = single.claim
+                        Text(claim.displayName).font(.subheadline.weight(.semibold))
+                        Text(claim.render(timeZone: timeZone))
+                            // Monospaced, so the MRZ's fixed-width lines line up as on a passport.
+                            .font(claim.isMrz ? .body.monospaced() : .body)
+                    case .ageOverGroup(let group):
+                        Text("Age").font(.subheadline.weight(.semibold))
+                        FlowLayout(spacing: 8) {
+                            ForEach(group.ages, id: \.age) { ageOver in
+                                AgeOverBadge(ageOver: ageOver)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
@@ -172,10 +232,87 @@ private struct DetailsList: View {
                 Divider()
             }
         }
-        if !passportData.isEmpty {
-            Text("Your Photo ID also carries the signed passport data it was issued from (SOD, DG1 and DG2). Verifiers only get it if they ask and you agree, typically at a border. Sharing DG1 reveals your full name, date of birth, sex, nationality, passport number and expiry together.")
-                .font(.subheadline)
+    }
+}
+
+/// Marks a Photo ID that carries the signed passport data it was issued from (SOD, DG1 and DG2),
+/// making it an ICAO Digital Travel Credential of type 1. Styled like the status chip above it.
+private struct DtcBadge: View {
+    var body: some View {
+        Label {
+            Text("DTC Compliant (Type 1)")
+        } icon: {
+            Image("EPassport")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 16)
+                .accessibilityHidden(true)
         }
+        .font(.subheadline.bold())
+        .foregroundStyle(Brand.success)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .overlay(Capsule().stroke(Brand.success, lineWidth: 1))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "✓ Over 18" in green or "✗ Over 65" in red: an icon and words, with colour only as reinforcement.
+private struct AgeOverBadge: View {
+    let ageOver: AgeOver
+
+    var body: some View {
+        let color = ageOver.isOver ? Brand.success : Brand.error
+        Label("Over \(ageOver.age)", systemImage: ageOver.isOver ? "checkmark" : "xmark")
+            .font(.subheadline.bold())
+            .foregroundStyle(color)
+            .padding(.leading, 8)
+            .padding(.trailing, 12)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(color, lineWidth: 1))
+            .fixedSize()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Over \(ageOver.age): \(ageOver.isOver ? "yes" : "no")")
+    }
+}
+
+/// Lays its children out left to right, wrapping onto new lines when they don't fit.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let frames = frames(for: subviews, maxWidth: proposal.width ?? .infinity)
+        return CGSize(
+            width: frames.map(\.maxX).max() ?? 0,
+            height: frames.map(\.maxY).max() ?? 0
+        )
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (subview, frame) in zip(subviews, frames(for: subviews, maxWidth: bounds.width)) {
+            subview.place(
+                at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                proposal: ProposedViewSize(frame.size)
+            )
+        }
+    }
+
+    private func frames(for subviews: Subviews, maxWidth: CGFloat) -> [CGRect] {
+        var frames: [CGRect] = []
+        var origin = CGPoint.zero
+        var lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if origin.x > 0 && origin.x + size.width > maxWidth {
+                origin = CGPoint(x: 0, y: origin.y + lineHeight + spacing)
+                lineHeight = 0
+            }
+            frames.append(CGRect(origin: origin, size: size))
+            origin.x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+        return frames
     }
 }
 
@@ -185,6 +322,10 @@ private func claimsOf(_ documentInfo: DocumentInfo) -> [Claim] {
 
 private extension Claim {
     var isPortrait: Bool { (self as? MdocClaim)?.dataElementName == "portrait" }
+    /// The passport's signed data (SOD, DG1, DG2), which only a Photo ID issued from a passport carries.
+    var isPassportData: Bool { (self as? MdocClaim)?.namespaceName == PhotoID.shared.DATAGROUPS_NAMESPACE }
+    /// The Photo ID's machine-readable zone, copied from the passport.
+    var isMrz: Bool { (self as? MdocClaim)?.dataElementName == "travel_document_mrz" }
 }
 
 extension Date {

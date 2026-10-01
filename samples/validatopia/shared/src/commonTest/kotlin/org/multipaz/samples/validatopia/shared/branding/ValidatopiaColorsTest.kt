@@ -17,6 +17,7 @@ class ValidatopiaColorsTest {
         "surfaceVariant/onSurfaceVariant" to (scheme.surfaceVariant to scheme.onSurfaceVariant),
         "surfaceContainer/onSurface" to (scheme.surfaceContainer to scheme.onSurface),
         "error/onError" to (scheme.error to scheme.onError),
+        "warningContainer/onWarningContainer" to (scheme.warningContainer to scheme.onWarningContainer),
     ) + listOf(scheme.background, scheme.surfaceContainer).flatMap { fill ->
         listOf(
             "success" to scheme.success,

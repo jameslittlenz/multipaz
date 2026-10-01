@@ -463,6 +463,7 @@ This only works when `admin` is the sole account, because bootstrap runs only wh
 **Gotchas**
 - **DNS:** new names can be cached as nonexistent for up to 30 minutes by a local resolver (for example a Pi-hole; its "Restart DNS resolver" button clears the cache). Test from outside with `curl --resolve <host>:443:52.64.118.51`.
 - **Wallet issuer URL:** it must end in `/openid4vci`. Without that, wallets post to `/challenge` at the root and get a 404.
+- **Wallet builds default to localhost:** Android builds use `http://localhost:6000/openid4vci` unless `validatopia.issuerUrl` is set. To build against this server every time, put `validatopia.issuerUrl=https://validatopia-server.linodigital.co.nz/openid4vci` in `~/.gradle/gradle.properties`, or pass it with `-P` on every build. iOS reads `VALIDATOPIA_ISSUER_URL` from `samples/validatopia/ios-config/DeveloperConfig.xcconfig`. A URL saved in a wallet's Settings overrides the built-in one.
 - **Admin site exposure:** it's public and gets crawled. Logins need a password plus TOTP; `ADMIN_ALLOW_CIDR` in the compose file can restrict it to known addresses.
 - **Moving hosts:** change `BASE_URL` in the compose file, the Caddy site names and the DNS records together.
 

@@ -1,7 +1,9 @@
 import AVFoundation
 import SwiftUI
 
-/// A camera preview that reports the first QR code it sees.
+/// A camera preview that reports the first QR code it sees. Used by Validatopia Verify to read a
+/// holder's code, and by Validatopia Wallet to scan a website's sharing request. To scan again,
+/// give it a new `.id`.
 struct QrScannerView: UIViewControllerRepresentable {
     let onCode: (String) -> Void
 

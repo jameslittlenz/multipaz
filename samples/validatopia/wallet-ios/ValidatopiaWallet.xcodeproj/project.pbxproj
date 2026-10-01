@@ -346,12 +346,14 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Validatopia Wallet uses Bluetooth to send your Photo ID to a verifier's phone, only after you agree.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID confirms it's you before your Photo ID is shared.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Validatopia Wallet uses the camera to scan a website's code for sharing your documents online.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Validatopia Wallet connects to a Validatopia issuer on your local network, for development.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -393,12 +395,14 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Validatopia Wallet uses Bluetooth to send your Photo ID to a verifier's phone, only after you agree.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID confirms it's you before your Photo ID is shared.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Validatopia Wallet uses the camera to scan a website's code for sharing your documents online.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Validatopia Wallet connects to a Validatopia issuer on your local network, for development.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

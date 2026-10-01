@@ -11,13 +11,18 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-/** Text and icon colors for status badges, from [ValidatopiaColorScheme]. */
+/**
+ * Text and icon colors for status badges, and the fill and content of warning banners, from
+ * [ValidatopiaColorScheme].
+ */
 @Immutable
 data class ValidatopiaStatusColors(
     val success: Color,
     val warning: Color,
     val neutral: Color,
     val error: Color,
+    val warningContainer: Color,
+    val onWarningContainer: Color,
 )
 
 /** The current status colors; set by [ValidatopiaTheme]. */
@@ -83,6 +88,8 @@ private fun ValidatopiaColorScheme.toStatusColors() = ValidatopiaStatusColors(
     warning = warning.toComposeColor(),
     neutral = neutral.toComposeColor(),
     error = error.toComposeColor(),
+    warningContainer = warningContainer.toComposeColor(),
+    onWarningContainer = onWarningContainer.toComposeColor(),
 )
 
 private fun String.toComposeColor(): Color {

@@ -20,6 +20,12 @@ final class WalletModel {
         didSet { UserDefaults.standard.set(consentAccepted, forKey: Keys.consentAccepted) }
     }
 
+    /// Whether the wallet is loaded and its terms accepted, so it can answer a sharing request.
+    var isReadyForSharing: Bool {
+        if case .ready = loadState { return consentAccepted }
+        return false
+    }
+
     /// The Validatopia issuer's base URL.
     var issuerUrl: String = UserDefaults.standard.string(forKey: Keys.issuerUrl) ?? WalletModel.defaultIssuerUrl {
         didSet { UserDefaults.standard.set(issuerUrl, forKey: Keys.issuerUrl) }
@@ -36,6 +42,8 @@ final class WalletModel {
     private(set) var presentmentSource: PresentmentSource!
     private(set) var provisioningModel: ProvisioningModel!
     private(set) var issuance: ValidatopiaIssuance!
+    /// Checks documents against their issuer's revocation list, for the details screen.
+    private(set) var credentialStatusChecker: CredentialStatusChecker!
     let promptModel = Platform.shared.promptModel
 
     private var storage: Storage!
@@ -88,6 +96,7 @@ final class WalletModel {
                 documentTypeRepository: documentTypeRepository,
                 readerTrustManager: ValidatopiaTrust.shared.createReaderTrustManager()
             )
+            credentialStatusChecker = CredentialStatusChecker(storage: storage, httpClientEngine: Darwin())
             provisioningModel = createProvisioningModel()
             // The documents that come with a Photo ID are redeemed on a second model that no UI
             // follows (see ValidatopiaIssuance).

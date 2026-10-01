@@ -5,17 +5,21 @@ import android.content.Context
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.io.bytestring.decodeToString
 import kotlinx.io.bytestring.encodeToByteString
 import org.multipaz.compose.document.DocumentModel
+import org.multipaz.digitalcredentials.DigitalCredentials
+import org.multipaz.digitalcredentials.getDefault
 import org.multipaz.document.DocumentStore
 import org.multipaz.document.buildDocumentStore
 import org.multipaz.documenttype.DocumentTypeRepository
@@ -28,6 +32,7 @@ import org.multipaz.provisioning.openid4vci.OpenID4VCIBackend
 import org.multipaz.provisioning.openid4vci.OpenID4VCIClientPreferences
 import org.multipaz.samples.validatopia.shared.idv.DevWalletBackend
 import org.multipaz.samples.validatopia.shared.idv.IdvClient
+import org.multipaz.samples.validatopia.shared.wallet.CredentialStatusChecker
 import org.multipaz.samples.validatopia.shared.wallet.ValidatopiaIssuance
 import org.multipaz.samples.validatopia.shared.wallet.ValidatopiaWallet
 import org.multipaz.securearea.SecureArea
@@ -35,6 +40,7 @@ import org.multipaz.securearea.SecureAreaRepository
 import org.multipaz.storage.Storage
 import org.multipaz.storage.StorageTable
 import org.multipaz.storage.StorageTableSpec
+import org.multipaz.util.Logger
 import org.multipaz.util.Platform
 
 /**
@@ -69,6 +75,9 @@ class WalletModel private constructor(
 
     /** Whether the user has accepted the welcome screen's terms. */
     val consentAccepted: StateFlow<Boolean> = mutableConsentAccepted.asStateFlow()
+
+    /** Checks documents against their issuer's revocation list, for the details screen. */
+    val credentialStatusChecker by lazy { CredentialStatusChecker(storage, Android) }
 
     /** The HTTP client for the issuer. It must not follow redirects (see [ProvisioningModel]). */
     val httpClient = HttpClient(Android) { followRedirects = false }
@@ -126,6 +135,48 @@ class WalletModel private constructor(
         }
     }
 
+    private var digitalCredentialsStarted = false
+
+    /**
+     * Registers the wallet's documents with the platform's W3C Digital Credentials API (Android
+     * Credential Manager), and again whenever they change, so websites can ask for them with
+     * `navigator.credentials.get()`. Requests arrive in [WalletCredentialManagerPresentmentActivity].
+     * Call on the main thread; later calls do nothing.
+     */
+    fun startDigitalCredentialsExport() {
+        if (digitalCredentialsStarted) {
+            return
+        }
+        digitalCredentialsStarted = true
+        scope.launch {
+            val digitalCredentials = DigitalCredentials.getDefault()
+            if (!digitalCredentials.registerAvailable) {
+                return@launch
+            }
+            // Registering on subscription means no change is missed between the two. That first
+            // registration is forced: the SDK records what it registered before Credential Manager
+            // confirms it, so a registration that failed last time would otherwise be skipped as
+            // unchanged.
+            documentStore.eventFlow
+                .onSubscription { registerDigitalCredentials(digitalCredentials, force = true) }
+                .collect { registerDigitalCredentials(digitalCredentials, force = false) }
+        }
+    }
+
+    private suspend fun registerDigitalCredentials(digitalCredentials: DigitalCredentials, force: Boolean) {
+        try {
+            digitalCredentials.register(
+                documentStore = documentStore,
+                documentTypeRepository = documentTypeRepository,
+                forceRegistration = force,
+            )
+        } catch (e: Exception) {
+            // Background work: websites just won't see the change until the next registration.
+            if (e is CancellationException) throw e
+            Logger.w(TAG, "Couldn't register documents with the Digital Credentials API", e)
+        }
+    }
+
     /** A client for the issuer's identity-proofing endpoints. */
     suspend fun createIdvClient(): IdvClient = IdvClient(
         issuerUrl = issuerUrl.value,
@@ -144,6 +195,7 @@ class WalletModel private constructor(
     }
 
     companion object {
+        private const val TAG = "WalletModel"
         private const val KEY_ISSUER_URL = "issuer_url"
         private const val KEY_CONSENT_ACCEPTED = "consent_accepted"
 

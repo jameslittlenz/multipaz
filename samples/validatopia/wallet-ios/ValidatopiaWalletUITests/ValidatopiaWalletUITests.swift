@@ -27,8 +27,9 @@ final class ValidatopiaWalletUITests: XCTestCase {
         tapScrollingIfNeeded(app.buttons["Agree and continue"])
 
         // Home, then the test identity list.
-        let getFirst = app.buttons["Get a Photo ID"]
-        let getAnother = app.buttons["Get another Photo ID"]
+        // The same label whether or not there are documents yet.
+        let getFirst = app.buttons["Add a Credential"].firstMatch
+        let getAnother = getFirst
         XCTAssertTrue(getFirst.waitForExistence(timeout: 10) || getAnother.exists)
         try auditAndCapture()
         tapScrollingIfNeeded(getFirst.exists ? getFirst : getAnother)
@@ -38,17 +39,20 @@ final class ValidatopiaWalletUITests: XCTestCase {
         try auditAndCapture()
         claudia.tap()
 
-        // Issuance ends on the new Photo ID's presenting screen: no identifying card art, only the caption.
-        let showCode = app.buttons["Show code"]
-        XCTAssertTrue(showCode.waitForExistence(timeout: 60), "The Photo ID wasn't issued")
-        XCTAssertTrue(app.staticTexts["Claudia's Photo ID"].exists)
-        try auditAndCapture()
-
-        // The viewing screen keeps its warning while the details scroll.
-        tapScrollingIfNeeded(app.buttons["View my details"])
-        let warning = app.staticTexts["Do not share this screen. It isn't verified, and the information on it can't be relied on."].firstMatch
-        XCTAssertTrue(warning.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["CLAUDIA"].exists || app.staticTexts["Claudia"].exists)
+        // Issuance ends on the new Photo ID's details: its card art, then the details, under a
+        // warning that stays pinned while they scroll.
+        let warning = app.staticTexts["Do not show this screen. This screen is just for you."].firstMatch
+        XCTAssertTrue(warning.waitForExistence(timeout: 60), "The Photo ID wasn't issued")
+        XCTAssertTrue(app.navigationBars["Claudia's Photo ID"].exists)
+        // Each detail is one VoiceOver element, labelled with its name and value together.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Claudia")).firstMatch.exists)
+        // The status is checked with the issuer's revocation list; a new Photo ID is valid.
+        let status = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Valid until")).firstMatch
+        XCTAssertTrue(status.waitForExistence(timeout: 20), "No validity status was shown")
+        let checking = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Checking with the issuer")).firstMatch
+        XCTAssertTrue(checking.waitForNonExistence(timeout: 20), "The revocation check didn't finish")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Couldn't check")).firstMatch.exists,
+                       "The issuer's revocation list couldn't be checked")
         try auditAndCapture()
         // Audited before scrolling: text passing under the banner is faded by the scroll edge
         // effect, which the contrast audit would count against it.
@@ -56,15 +60,19 @@ final class ValidatopiaWalletUITests: XCTestCase {
         app.swipeUp()
         XCTAssertEqual(warning.frame, warningFrame, "The warning should stay pinned while the details scroll")
 
-        app.buttons["View portrait"].firstMatch.tap()
-        XCTAssertTrue(app.images["Your Photo ID portrait"].waitForExistence(timeout: 10))
+        app.swipeDown()
+        tapScrollingIfNeeded(app.buttons["View portrait"].firstMatch)
+        XCTAssertTrue(app.images["Your portrait"].waitForExistence(timeout: 10))
         try auditAndCapture()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        // Presenting: a QR code when Bluetooth is available (devices), else a clear failure (the Simulator has none).
-        tapScrollingIfNeeded(showCode)
-        let qr = app.images["QR code for sharing your Photo ID. Show it to the verifier."]
+        // Presenting from the home screen's Share button: a QR code when Bluetooth is available
+        // (devices), else a clear failure (the Simulator has none).
+        let share = app.buttons["Share"].firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 10))
+        share.tap()
+        let qr = app.images["QR code for sharing your document. Show it to the verifier."]
         let failed = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Sharing didn't complete")).firstMatch
         let outcome = NSPredicate { _, _ in qr.exists || failed.exists }
         wait(for: [XCTNSPredicateExpectation(predicate: outcome, object: nil)], timeout: 30)
@@ -72,6 +80,64 @@ final class ValidatopiaWalletUITests: XCTestCase {
         XCTAssertTrue(qr.exists || failed.exists, "Neither a QR code nor an error was shown")
         let bluetooth = qr.exists ? "QR code shown" : "failed: \(failed.label)"
         XCTContext.runActivity(named: "Presentment on this device: \(bluetooth)") { _ in }
+    }
+
+    /// The Share screen's two panels, then an online sharing request answered end to end. The
+    /// wallet must already hold a document the request asks for (run
+    /// `testPersonaPhotoIdAndItsScreens` first). The request is an OpenID4VP link from a verifier,
+    /// passed as `TEST_RUNNER_VALIDATOPIA_ONLINE_REQUEST_URI`; without one the test is skipped.
+    func testOnlineSharingRequest() throws {
+        guard let uri = ProcessInfo.processInfo.environment["VALIDATOPIA_ONLINE_REQUEST_URI"],
+              let url = URL(string: uri)
+        else {
+            throw XCTSkip("Set TEST_RUNNER_VALIDATOPIA_ONLINE_REQUEST_URI to an OpenID4VP request link")
+        }
+        app.launch()
+        let agree = app.buttons["Agree and continue"]
+        if agree.waitForExistence(timeout: 30) {
+            tapScrollingIfNeeded(agree)
+        }
+
+        // The Share screen: in person by default, and the Online panel, which needs the camera.
+        let share = app.buttons["Share"].firstMatch
+        XCTAssertTrue(share.waitForExistence(timeout: 30), "The wallet has no documents to share")
+        share.tap()
+        XCTAssertTrue(app.buttons["In person"].waitForExistence(timeout: 10))
+        try auditAndCapture()
+        app.buttons["Online"].tap()
+        XCTAssertTrue(app.staticTexts["Scan a website's code"].waitForExistence(timeout: 10))
+        try auditAndCapture()
+
+        // A website's link opens the request, and the consent sheet asks before sharing.
+        app.open(url)
+        // iOS asks before opening a link in an app.
+        let openInApp = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+        if openInApp.waitForExistence(timeout: 10) {
+            openInApp.tap()
+        }
+        // Opening the link relaunches the app with this test's arguments, so its terms are asked for
+        // again; the wallet holds the request until they're accepted.
+        if agree.waitForExistence(timeout: 10) {
+            tapScrollingIfNeeded(agree)
+        }
+        let consentShare = app.buttons.matching(identifier: "Share").element(boundBy: 0)
+        XCTAssertTrue(consentShare.waitForExistence(timeout: 30), "The consent sheet didn't appear")
+        // Not audited: the consent sheet is multipaz-swiftui's, and its audit fails on hit area.
+        consentShare.tap()
+        let outcome = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@",
+                                                           "Shared.", "Sharing didn't complete")).firstMatch
+        XCTAssertTrue(outcome.waitForExistence(timeout: 30), "No outcome was shown")
+        #if targetEnvironment(simulator)
+        // The Simulator's software keys need a passcode that nothing enters during a test, so the
+        // flow stops at signing, after the request was fetched and consented to.
+        XCTAssertTrue(
+            ["Shared. The website has your answer.", "Sharing didn't complete: User canceled authentication"]
+                .contains(outcome.label),
+            outcome.label
+        )
+        #else
+        XCTAssertEqual(outcome.label, "Shared. The website has your answer.")
+        #endif
     }
 
     func testLargestAccessibilityTextSize() throws {

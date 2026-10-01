@@ -8,6 +8,8 @@ package org.multipaz.samples.validatopia.shared.branding
  * Beyond the Material roles it carries [success], [warning] and [neutral]: text and icon colors
  * for trust badges, each readable on [background], [surface] and [surfaceContainer]. Badges pair
  * them with an icon and a label, so status is never conveyed by color alone.
+ *
+ * [warningContainer] and [onWarningContainer] are a fill and its content, for warning banners.
  */
 data class ValidatopiaColorScheme(
     val primary: String,
@@ -31,6 +33,8 @@ data class ValidatopiaColorScheme(
     val success: String,
     val warning: String,
     val neutral: String,
+    val warningContainer: String,
+    val onWarningContainer: String,
 )
 
 /**
@@ -78,6 +82,8 @@ object ValidatopiaColors {
         success = "#1B7A45",
         warning = "#8A5A00",
         neutral = "#5A6272",
+        warningContainer = "#FFC857",
+        onWarningContainer = NAVY,
     )
 
     val dark = ValidatopiaColorScheme(
@@ -102,5 +108,8 @@ object ValidatopiaColors {
         success = "#A8E6C1",
         warning = "#FFC857",
         neutral = "#AAB4C3",
+        // The same yellow banner as in the light scheme, which stands out on navy.
+        warningContainer = "#FFC857",
+        onWarningContainer = NAVY,
     )
 }

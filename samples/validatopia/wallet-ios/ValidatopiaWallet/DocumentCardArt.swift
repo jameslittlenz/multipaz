@@ -13,7 +13,7 @@ enum DocumentCardArt {
 
     /// The art, as PNG, for a document of `style`'s type held by `holderName` ("Claudia H."), if known.
     static func png(for style: CardArtStyle, holderName: String?) -> ByteString {
-        let key = "\(style.titleLead)\(style.titleEmphasis)|\(holderName ?? "")"
+        let key = "\(style.titleLead)\(style.titleEmphasis)|\(style.subtitleText)|\(holderName ?? "")"
         if let png = pngs[key] {
             return png
         }
@@ -60,7 +60,7 @@ enum DocumentCardArt {
             ))
             title.draw(at: CGPoint(x: 56, y: 52))
             NSAttributedString(
-                string: "Validatopia",
+                string: style.subtitleText,
                 attributes: [
                     .font: UIFont.systemFont(ofSize: 30, weight: .semibold),
                     .foregroundColor: UIColor(hex: style.subtitle),

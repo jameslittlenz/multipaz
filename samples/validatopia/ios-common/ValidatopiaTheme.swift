@@ -24,6 +24,9 @@ enum Brand {
     static let success = color(\.success)
     static let warning = color(\.warning)
     static let neutral = color(\.neutral)
+    /// Warning banners: a yellow fill and its content.
+    static let warningContainer = color(\.warningContainer)
+    static let onWarningContainer = color(\.onWarningContainer)
 
     static let navy = Color(uiColor: UIColor(hex: ValidatopiaColors.shared.NAVY))
     static let green = Color(uiColor: UIColor(hex: ValidatopiaColors.shared.GREEN))

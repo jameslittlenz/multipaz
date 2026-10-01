@@ -15,6 +15,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
 
+    <!-- Scanning a website's code to share online. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <!-- NFC tap presentment (host card emulation). -->
     <uses-feature android:name="android.hardware.nfc.hce" android:required="false" />
     <uses-permission android:name="android.permission.NFC" />
@@ -31,12 +35,51 @@
 
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|fontScale|fontWeightAdjustment|uiMode|locale|layoutDirection">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Online presentment through the W3C Digital Credentials API (Credential Manager). -->
+        <activity
+            android:name=".WalletCredentialManagerPresentmentActivity"
+            android:screenOrientation="portrait"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"
+            android:theme="@style/NavigationActivityTheme"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="androidx.credentials.registry.provider.action.GET_CREDENTIAL" />
+                <action android:name="androidx.identitycredentials.action.GET_CREDENTIALS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Online presentment with OpenID4VP request links, opened by a website or app or scanned
+             on the Share screen. -->
+        <activity
+            android:name=".WalletUriSchemePresentmentActivity"
+            android:screenOrientation="portrait"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|fontScale|fontWeightAdjustment|keyboard|layoutDirection|locale|mcc|navigation|smallestScreenSize|touchscreen|uiMode"
+            android:theme="@style/NavigationActivityTheme"
+            android:launchMode="singleInstance"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="openid4vp" />
+                <data android:scheme="haip-vp" />
+                <!-- ISO/IEC TS 18013-7 Annex A. -->
+                <data android:scheme="mdoc" />
+                <data android:host="*" />
             </intent-filter>
         </activity>
 

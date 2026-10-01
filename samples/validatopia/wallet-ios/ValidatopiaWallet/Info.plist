@@ -4,6 +4,21 @@
 <dict>
 	<key>ValidatopiaIssuerUrl</key>
 	<string>$(VALIDATOPIA_ISSUER_URL)</string>
+	<!-- Online sharing requests (OpenID4VP, and ISO/IEC 18013-7 Annex A) that a website or app
+	     opens in the wallet. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Online sharing request</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openid4vp</string>
+				<string>haip-vp</string>
+				<string>mdoc</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- A development issuer on this Mac or the local network is plain HTTP. -->

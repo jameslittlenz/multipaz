@@ -36,6 +36,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:screenOrientation="portrait"
             android:exported="true"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|density|fontScale|fontWeightAdjustment|uiMode|locale|layoutDirection">

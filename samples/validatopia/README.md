@@ -110,6 +110,23 @@ The payload is the text of the wallet's QR code: decode a screenshot with any QR
 the iOS wallet, read the `VALIDATOPIA_QR` line its debug build logs. The use case is one of
 `VENUE_ENTRY`, `LIQUOR_STORE`, `PARCEL_PICKUP`, `HOTEL_CHECK_IN`, `CROSS_BORDER`.
 
+### A distributable Android wallet APK
+
+`./gradlew :samples:validatopia:wallet-android:assembleRelease` writes
+`wallet-android/build/outputs/apk/release/wallet-android-release.apk`. It takes these properties,
+best kept in `~/.gradle/gradle.properties` so they stay out of the repo:
+
+- `validatopia.issuerUrl`: the issuer the wallet starts with, ending in `/openid4vci`.
+- `validatopia.release.storeFile`, `.storePassword`, `.keyAlias` and `.keyPassword`: the signing
+  key. Without them the APK is unsigned. Sign every update with the same key, or phones won't
+  install it over the previous one.
+- `validatopia.releaseDevAttestation=true`: sign wallet attestations in the app with the public
+  development identity, as debug builds do. Without it, release builds use the attested wallet
+  back-end, which only admits apps on its allow-list (the multipaz test apps by default).
+
+A release build can't be installed over a debug build (they're signed differently): uninstall the
+debug build first, which removes its documents.
+
 ## Tests
 
 - `./gradlew :samples:validatopia:shared:jvmTest` and

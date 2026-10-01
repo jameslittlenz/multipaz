@@ -4,8 +4,10 @@ import SwiftUI
 enum WalletRoute: Hashable {
     case addPhotoId
     case settings
-    case document(String)
-    case present(String)
+    /// The Share screen.
+    case share
+    /// An online sharing request link (see ``OnlinePresentmentView``).
+    case online(String)
     case details(String)
     case portrait(String)
 }
@@ -14,6 +16,8 @@ struct WalletRootView: View {
     @State private var model = WalletModel()
     @State private var path: [WalletRoute] = []
     @State private var provisioningActive = false
+    /// An online sharing request link that arrived before the wallet was ready for it.
+    @State private var pendingOnlineRequest: String?
 
     var body: some View {
         Group {
@@ -46,6 +50,13 @@ struct WalletRootView: View {
         }
         .environment(model)
         .task { await model.load() }
+        // A website or app opened an online sharing request link (see Info.plist's URL types).
+        .onOpenURL { url in
+            guard let scheme = url.scheme?.lowercased(), onlineRequestSchemes.contains(scheme) else { return }
+            pendingOnlineRequest = url.absoluteString
+            openPendingOnlineRequest()
+        }
+        .onChange(of: model.isReadyForSharing) { openPendingOnlineRequest() }
     }
 
     @ViewBuilder
@@ -53,11 +64,18 @@ struct WalletRootView: View {
         switch route {
         case .addPhotoId: AddPhotoIdView()
         case .settings: SettingsView()
-        case .document(let id): DocumentView(documentId: id, path: $path)
-        case .present(let id): PresentQrView(documentId: id)
+        case .share: ShareView(path: $path)
+        case .online(let uri): OnlinePresentmentView(uri: uri)
         case .details(let id): MyDetailsView(documentId: id, path: $path)
         case .portrait(let id): PortraitView(documentId: id)
         }
+    }
+
+    /// Opens the pending online sharing request once the wallet is loaded and its terms accepted.
+    private func openPendingOnlineRequest() {
+        guard model.isReadyForSharing, let uri = pendingOnlineRequest else { return }
+        pendingOnlineRequest = nil
+        path = [.online(uri)]
     }
 
     /// Shows the provisioning sheet while the issuer is being talked to, and once a new Photo ID is
@@ -71,7 +89,7 @@ struct WalletRootView: View {
                 provisioningActive = false
                 model.provisioningModel.cancel()
                 if issued.isNewlyIssued {
-                    path = [.document(issued.document.identifier)]
+                    path = [.details(issued.document.identifier)]
                 }
             default:
                 provisioningActive = true

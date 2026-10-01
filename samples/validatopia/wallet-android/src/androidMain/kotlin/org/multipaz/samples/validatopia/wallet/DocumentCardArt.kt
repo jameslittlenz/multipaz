@@ -90,7 +90,7 @@ internal class DocumentCardArt(private val context: Context) {
             )
             drawText(
                 textMeasurer = textMeasurer,
-                text = "Validatopia",
+                text = style.subtitleText,
                 topLeft = Offset(58f, 136f),
                 style = TextStyle(fontSize = 30.sp, color = style.subtitle.toColor(), fontWeight = FontWeight.SemiBold),
             )

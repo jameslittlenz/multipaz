@@ -9,14 +9,15 @@ import org.multipaz.mdoc.credential.MdocCredential
 import org.multipaz.utopia.knowntypes.Loyalty
 
 /**
- * The colors and title of one document's card art.
+ * The colors, title and subtitle of one document's card art.
  *
  * @property titleLead the start of the title, in regular weight (including any trailing space).
  * @property titleEmphasis the rest of the title, in bold.
  * @property background the card's background color.
  * @property hills the color of the three hills; the nearest is opaque, the others tints of it.
  * @property title the title's color.
- * @property subtitle the color of the "Validatopia" line under the title.
+ * @property subtitle the color of the subtitle line under the title.
+ * @property subtitleText the subtitle line: who the document is from, or what it's for.
  */
 data class CardArtStyle(
     val titleLead: String,
@@ -25,6 +26,7 @@ data class CardArtStyle(
     val hills: String,
     val title: String,
     val subtitle: String,
+    val subtitleText: String,
 )
 
 /**
@@ -32,7 +34,7 @@ data class CardArtStyle(
  * none) by `DocumentCardArt` on Android and iOS from these styles.
  *
  * Every document shares the Photo ID's design: a dark background with three see-through rolling
- * hills, the title naming the type, "Validatopia" under it and a "Powered by" credit on the
+ * hills, the title naming the type, a subtitle under it and a "Powered by" credit on the
  * nearest hill. Each type has its own pairing of navy, teal and green so it can be told apart at
  * a glance; the title always names the type, so color is never the only cue.
  *
@@ -57,10 +59,11 @@ object ValidatopiaCardArt {
         background = ValidatopiaColors.NAVY,
         hills = ValidatopiaColors.GREEN,
         title = WHITE,
-        subtitle = ValidatopiaColors.GREEN,
+        subtitle = WHITE,
+        subtitleText = "DTC Compliant",
     )
 
-    // On the other backgrounds the hill color is too faint for the subtitle (under 4.5:1), so it's white.
+    // Subtitles are white: on the teal backgrounds the hill colors are too faint (under 4.5:1).
     val driverLicence = CardArtStyle(
         titleLead = "Driver ",
         titleEmphasis = "Licence",
@@ -68,6 +71,7 @@ object ValidatopiaCardArt {
         hills = ValidatopiaColors.NAVY,
         title = WHITE,
         subtitle = WHITE,
+        subtitleText = "Validatopia DMV",
     )
 
     val gymMembership = CardArtStyle(
@@ -77,6 +81,7 @@ object ValidatopiaCardArt {
         hills = ValidatopiaColors.TEAL,
         title = WHITE,
         subtitle = WHITE,
+        subtitleText = "Validatopia Fitness Center",
     )
 
     val ageVerification = CardArtStyle(
@@ -86,6 +91,7 @@ object ValidatopiaCardArt {
         hills = ValidatopiaColors.GREEN,
         title = WHITE,
         subtitle = WHITE,
+        subtitleText = "For Online Pseudonymous Use",
     )
 
     /** For a document whose type isn't known yet, e.g. before its credentials are created. */
@@ -96,6 +102,7 @@ object ValidatopiaCardArt {
         hills = ValidatopiaColors.GREEN,
         title = WHITE,
         subtitle = ValidatopiaColors.GREEN,
+        subtitleText = "Validatopia",
     )
 
     /** Every style, for checking them all. */

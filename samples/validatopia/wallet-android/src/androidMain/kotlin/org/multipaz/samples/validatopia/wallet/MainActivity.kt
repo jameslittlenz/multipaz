@@ -21,7 +21,7 @@ class MainActivity : FragmentActivity() {
         setContent {
             ValidatopiaTheme {
                 val model by produceState<WalletModel?>(initialValue = null) {
-                    value = WalletModel.get(applicationContext)
+                    value = WalletModel.get(applicationContext).also { it.startDigitalCredentialsExport() }
                 }
                 model?.let { WalletApp(it) } ?: ValidatopiaLaunchScreen(appName = "Wallet")
             }
