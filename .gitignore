@@ -23,3 +23,6 @@ samples/validatopia/ios-config/DeveloperConfig.xcconfig
 
 # HSQLDB runtime files
 db.hsqldb.*
+
+# Built by .design-sync/build-tokens.py for Claude Design.
+/ds-bundle/

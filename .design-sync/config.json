@@ -1,0 +1,6 @@
+{
+  "projectId": "455de0c8-c2c7-475c-ae51-b822c2080a93",
+  "shape": "tokens",
+  "build": "python3 .design-sync/build-tokens.py",
+  "readmeHeader": ".design-sync/conventions.md"
+}

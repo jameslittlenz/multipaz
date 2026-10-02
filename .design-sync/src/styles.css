@@ -1,0 +1,13 @@
+/* Validatopia design tokens. Designs receive this file and everything it imports. */
+@import url("tokens/colors.css");
+@import url("tokens/typography.css");
+
+/* Base: the apps' default text and page colours. */
+body {
+  margin: 0;
+  font-family: var(--vt-font-family);
+  font-size: var(--vt-type-body-large-size);
+  line-height: var(--vt-type-body-large-line-height);
+  color: var(--vt-color-on-background);
+  background: var(--vt-color-background);
+}
