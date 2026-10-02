@@ -379,8 +379,49 @@ Extends the existing plain HTML/JS in `multipaz-openid4vci/src/main/resources/re
 - **M3.** Admin website, hardened single-container profile, nginx rules. **Safe to deploy publicly.**
 - **M4.** Android wallet and verifier on the persona path, with all use cases including cross-border. The full selective-disclosure demo works on Android.
 - **M5.** iOS wallet and verifier on the persona path; mixed Android/iOS presentment.
-- **M6.** Real NZ and AU passports on both platforms: OCR, chip read, AA where supported, liveness, ONNX face match, threshold calibration.
+- **M6.** Real NZ and AU passports **on Android**: OCR, chip read, liveness, ONNX face match, threshold calibration, and the server-side fixes real chips need (see "M6 readiness" below). AA only if the discovery task shows NZ or AU chips carry DG15.
+- **M6b (deferred).** The iOS passport path (NFCPassportReader, Vision OCR and liveness). It's blocked on an Apple developer team that can provision the NFC tag-reading entitlement. Until then the iOS wallet keeps the persona path only, and the iOS verifier reads by QR.
 - **M7.** Accessibility audit and fixes, ZKP use case, reader certificates for each use case, README and demo script.
+
+### M6 readiness
+What exists from M1–M5, and what M6 has to add before a real passport can produce a Photo ID.
+
+**Already in place**
+- Passive authentication, MRZ and DG1 parsing, and the CSCA bundle (`IcaoCscaCertificates`), including CSCAs with explicit EC parameters.
+- `/idv/start` and `/idv/evidence`, `PassportEvidence`, `PassportIdentityProofing`, the audit tables and the settings.
+- The wallet's persona path, the verifier's cross-border check, and the deployed server.
+
+**Blocking, server side** (land these before the wallet can submit evidence to the public server)
+1. **Face matching is fake.** `MainValidatopia` wires `FakeFaceMatcher`, which scores every selfie 1.0. Since real CSCAs are now trusted, anyone who can read a passport chip, or send its SOD, DG1 and DG2, gets a Photo ID in that person's name. **Mitigated (2026-10-02):** the "Passport issuance enabled" setting (`passportIssuanceEnabled`) is off by default, including for settings saved before it existed, and `/idv/start` and `/idv/evidence` return 404 while it's off. `OnnxFaceMatcher` now exists (blocker 2), so the setting can be turned on once it's deployed, accepting an uncalibrated threshold. The deployed server gets all of this with its next deploy.
+2. **`OnnxFaceMatcher` and `downloadFaceModels`. Done (2026-10-02):**
+   - YuNet (`face_detection_yunet_2023mar.onnx`) and SFace (`face_recognition_sface_2021dec.onnx`) from opencv_zoo commit `47534e27`, run with ONNX Runtime 1.30.0. Their SHA-256s, cross-checked against Hugging Face's opencv mirror, are pinned in `downloadFaceModels` and in `FaceModel`, which checks them again when the server loads the models.
+   - Faces are aligned with a hand-written 5-point similarity transform. On the persona portraits it gives the same landmarks as OpenCV's `FaceDetectorYN` and the same scores as `FaceRecognizerSF` to 3 decimal places.
+   - The score is SFace's cosine similarity, in [-1, 1]. OpenCV suggests 0.363, but the two placeholder personas, different people, score 0.363 against each other. The default threshold is therefore 0.5 until calibration. A server that saved 0.6 earlier keeps 0.6, which is stricter.
+   - The container image carries the models in `/app/face-models` (`face_models_dir`). Without them the server uses `UnavailableFaceMatcher`, which rejects every passport with `FACE_MATCHER_UNAVAILABLE`. Unreadable images and images with no face are rejected with their own flags (`SELFIE_UNREADABLE`, `NO_FACE_IN_SELFIE`, and so on).
+   - Images must be upright, because EXIF orientation is ignored. The wallet has to send the selfie with its pixels rotated upright.
+3. **JPEG 2000 in DG2. Done (2026-10-02):** `Jp2Decoder` decodes JP2 files and bare J2K codestreams with JJ2000 (`edu.ucar:jj2000`, the codec `multipaz-compose` already uses on Android) and re-encodes them as JPEG. Tests build their fixtures with JJ2000's encoder.
+4. **DG2 parsing. Done (2026-10-02):** `Lds.parseDG2` skips feature points and takes the image's length from the facial record header. ISO/IEC 39794-5 (a constructed `7F2E` data block) is still unsupported and fails with a clear `LdsException`; add it if the discovery task finds it.
+5. **Retention. Done (2026-10-02):** `IssuanceState.systemOfRecordData` was already AES-GCM encrypted (`SimpleCipher`, keyed by the server's persistent `rpc` key, which lives in the same database, so a full database backup can still decrypt it). `MainValidatopia` now deletes it hourly from sessions authorized more than `dataRetentionDays` ago, and revoking a credential deletes its session's copy. Each companion document's session holds its own copy, so revoking the Photo ID alone leaves the other three until they're revoked or age out.
+6. **Attestation for the passport path. Decided (2026-10-02): accepted as open.** Debug builds, and release builds made with `validatopia.releaseDevAttestation`, sign with the public development identity, so the issuer can't tell the app from a script. The passport path on the public server stays open to anyone who can script it. A script still needs a genuine chip read (SOD, DG1, DG2) and a selfie that matches its portrait.
+
+**Android wallet. Done (2026-10-02), and a real NZ passport has been issued a Photo ID end to end:**
+- Dependencies, pinned: JMRTD 0.8.8 and scuba (LGPL, unmodified, listed in `samples/validatopia/wallet-android/NOTICE`), and ML Kit text recognition and face detection with bundled models. JMRTD raises `bcprov-jdk18on` to 1.85.2 in the wallet only. `PassportChipReader` swaps Android's cut-down "BC" provider for the full one without reordering the others.
+- `PassportScreen`: consent for biometric data and retention; MRZ scan (alternating plain and adaptively thresholded frames, since NZ's security printing defeats plain OCR) or typed entry with auto-formatted dates; chip read in `IsoDep` reader mode (PACE, then BAC; 10-second timeout; progress while DG2 reads); the scanned or typed MRZ checked against DG1; liveness (blink or head turn, the holder's choice, with haptic and screen-reader cues); an upright JPEG selfie of at most 1024 pixels; submission; rejection flags explained in plain language (`IdvFlags`).
+- Shared code: `PassportAccessKey` finds the MRZ's second line in OCR text, undoing common misreads but accepting only what passes every check digit. `LivenessChallenge` holds the liveness logic for both platforms. `IdvClient` has `startPassportSession()` and `submitPassportEvidence()`. `PassportChipReport` describes a chip without personal data.
+- "Show chip details" works in every build; debug builds can also save the chip's files for `adb pull`, to diagnose a chip locally. Delete them afterwards and never commit them.
+- The "Get a Photo ID" screen only offers the passport path while the issuer accepts passports; debug builds can always read a chip.
+- Not done: spoken prompts beyond screen readers' live regions; checking the selfie's quality before submitting.
+
+**Android verifier**
+- **Done (2026-10-02):** the cross-border result decodes DG2 with `multipaz-compose`'s `decodeImage()`, which handles JPEG 2000.
+- Confirm brainpool signatures verify on the device if the discovery task finds them.
+
+**Discovery and fixtures**
+- **NZ done (2026-10-02)** in `docs/validatopia/passport-profiles.md`. NZ chips use PACE, carry DG14 and DG15, sign with ECDSA and SHA-256 under P-384 CSCAs, store the SOD with BER indefinite lengths, and put two feature points before a JPEG portrait. Supporting them took three fixes in `multipaz-idv`: the EF.SOD tag, indefinite lengths (`BerLengths`), and keeping signed attributes and certificates byte for byte. `SyntheticPassportProfile.NZL` mirrors the layout, and `PhotoIdEndToEndTest` uses it.
+- **AU not done:** no Australian passport was available. Read one and add `SyntheticPassportProfile.AUS`.
+- Calibrate the threshold: collect genuine and impostor pairs from consenting people, and record the false accept and false reject rates in `passport-profiles.md`. So far, one NZ holder's genuine pairs scored 0.58 to 0.71.
+
+**Out of scope for M6:** CRL checking of document signers, and CAN entry, which passports don't need. NZ chips do carry DG15, so Active Authentication is now possible for them: `/idv/start` would return a nonce, and `PassportEvidence` would carry DG15 and the chip's response. It's a candidate for after M6.
 
 ## Verification
 ```
@@ -404,14 +445,14 @@ The iOS builds and tests need macOS with Xcode. This Linux environment can't com
 7. Revoke a credential in the admin site and show the verifier flags it.
 
 ## Getting started in a development environment
-- **Branch:** `claude/upbeat-rubin-hap160` on `jameslittlenz/multipaz`. It is upstream `main` plus this plan (`docs/validatopia/PLAN.md`). No code has been written yet.
+- **Branch:** `claude/upbeat-rubin-hap160` on `jameslittlenz/multipaz`. It is upstream `main` plus this plan (`docs/validatopia/PLAN.md`) and milestones M0–M5.
 - **Needed for M0–M4 and the server:**
   - JDK 17 or later (21 works).
   - Android SDK with `ANDROID_HOME` set, or `local.properties` with `sdk.dir`.
   - Network access to `dl.google.com` and Maven Central.
   - Docker or podman, for the container milestone.
   - Two NFC-capable Android phones, plus NZ or AU passports for M6.
-- **Needed for M5 and the iOS half of M6:** macOS with Xcode, an Apple developer team (for the NFC and App Attest entitlements), and physical iPhones.
+- **Needed for M5 and M6b:** macOS with Xcode, an Apple developer team (for the NFC and App Attest entitlements), and physical iPhones. M6b can't start until the team can provision NFC tag reading.
 - **Check the environment first:** `./gradlew :multipaz:jvmTest` must pass before any changes. That proves the toolchain works.
 - **Suggested first prompt for Claude Code:** "Read `docs/validatopia/PLAN.md` and `CLAUDE.md`, then implement milestone M0 and then M1. Run the listed Gradle tests after each and stop at the end of each milestone for review."
 - **Before M1's crypto work:** decide the Validatopia country codes, and have NZ and AU CSCA certificates available.
@@ -469,10 +510,15 @@ This only works when `admin` is the sole account, because bootstrap runs only wh
 
 ## Open questions / risks
 - The Validatopia codes: proposed alpha-2 `XV` and alpha-3 `XVA`, from the ISO user-assigned range. To be confirmed.
-- **Brainpool on iOS** is the hardest crypto gap. It only matters if NZ or AU passports use brainpool, which the M1 discovery task settles. Until it's done, those passports degrade gracefully to "unsupported on device".
+- **Brainpool on iOS** is the hardest crypto gap. It only matters if NZ or AU passports use brainpool. NZ doesn't (its CSCAs are P-384 and RSA); AU is unknown. Until it's done, such passports degrade gracefully to "unsupported on device".
 - Keeping the bundled CSCA certificates current through rollovers, and the terms for redistributing them in the apps.
 - NFCPassportReader depends on OpenSSL through SPM. JMRTD and scuba are LGPL, used only in the Android wallet as unmodified jars, with a NOTICE file.
 - Face-model accuracy and demographic bias need calibration. Avoid ArcFace/InsightFace weights, which are licensed for non-commercial use only.
 - IsoDep timeouts on long DG2 reads, and clashes between BouncyCastle and Android's own copy of it.
 - App Attest and Android key attestation don't work on simulators or emulators. Debug builds need an explicitly flagged dev allow-list, which is off in the public profile.
-- JMRTD, NFCPassportReader, ML Kit and ONNX Runtime versions still need to be pinned.
+- NFCPassportReader still needs to be pinned. JMRTD (0.8.8), scuba (0.0.27), ML Kit (text recognition 16.0.1, face detection 16.1.7) and ONNX Runtime (1.30.0) are pinned.
+- **M6 decisions still open** (see "M6 readiness"):
+  - **Passport path on the deployed server.** Resolved in code: off by default (see blocker 1). The deployed server only picks this up with its next deploy.
+  - **Face alignment.** Resolved: a hand-written 5-point similarity transform (blocker 2).
+  - **Verifier's DG2 face.** Resolved: decoded on the phone with `decodeImage()`.
+  - **Attestation for the passport path.** Resolved: accepted that the public passport path can be scripted (blocker 6).
