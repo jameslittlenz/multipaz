@@ -26,9 +26,11 @@ private const val IDV_SESSION_TTL_MINUTES = 10L
  * The session id must be included in the [org.multipaz.openid4vci.idv.PassportEvidence] posted
  * to `/idv/evidence`. Active Authentication verification (which would otherwise use a nonce from
  * this endpoint) is deferred: `aa/ActiveAuthVerifier.kt` wasn't built in M1.
+ *
+ * Returns 404 while passport issuance is switched off in the admin settings.
  */
 suspend fun idvStart(call: ApplicationCall) {
-    identityProofingOrNotFound(call) ?: return
+    passportProofingOrNotFound(call) ?: return
     val json = Json.parseToJsonElement(call.receiveText()) as JsonObject
     val clientId = json["client_id"]?.jsonPrimitive?.content
         ?: throw InvalidRequestException("missing parameter 'client_id'")

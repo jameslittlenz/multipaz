@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.multipaz.openid4vci.util.CredentialId
 import org.multipaz.openid4vci.util.CredentialState
+import org.multipaz.openid4vci.util.deleteSystemOfRecordData
 import org.multipaz.provisioning.CredentialFormat
 import org.multipaz.rpc.handler.InvalidRequestException
 
@@ -46,6 +47,10 @@ suspend fun adminSetCredentialStatus(call: ApplicationCall) {
     )
     invalidateStatusList(bucket)
     invalidateIdentifierList(bucket)
+    if (status != CredentialState.Status.VALID) {
+        // A revoked credential's identity-proofing data (e.g. passport data) is no longer kept.
+        deleteSystemOfRecordData(credential.issuanceStateId)
+    }
     call.respondText(
         text = buildJsonObject {
             put("success", true)

@@ -182,6 +182,7 @@ if [ "$PROFILE" = "validatopia" ]; then
     -param admin_allow_cidr="$ADMIN_ALLOW_CIDR" \
     -param idv_demo_mode="${IDV_DEMO_MODE:-false}" \
     -param personas_seed_dir=/app/data/personas \
+    -param face_models_dir=/app/face-models \
     -param preauthorized_offer_secret="$(head -c 24 /dev/urandom | base64)"
   service backend backend org.multipaz.backend.server.Main 8008
 else

@@ -31,9 +31,11 @@ private const val MAX_EVIDENCE_BYTES = 2 * 1024 * 1024
  * holds one offer per credential issued after identity proofing (see [createIdvOffers]) and
  * `offer` is the first of them, the Photo ID. Response on rejection (HTTP 400):
  * `{"error": "idv_rejected", "flags": [...]}`. The session is single-use either way.
+ *
+ * Returns 404 while passport issuance is switched off in the admin settings.
  */
 suspend fun idvEvidence(call: ApplicationCall) {
-    val identityProofing = identityProofingOrNotFound(call) ?: return
+    val identityProofing = passportProofingOrNotFound(call) ?: return
     val body = call.receive<ByteArray>()
     if (body.size > MAX_EVIDENCE_BYTES) {
         throw InvalidRequestException("evidence exceeds the maximum size")

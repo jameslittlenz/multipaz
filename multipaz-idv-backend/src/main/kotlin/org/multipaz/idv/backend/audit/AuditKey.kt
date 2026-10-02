@@ -2,6 +2,7 @@ package org.multipaz.idv.backend.audit
 
 import org.multipaz.crypto.Crypto
 import org.multipaz.util.toBase64Url
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Instant
 
 /**
@@ -12,6 +13,10 @@ import kotlin.time.Instant
  */
 internal fun sortableKey(timestamp: Instant): String {
     val millis = timestamp.toEpochMilliseconds().coerceAtLeast(0)
+    // Keeps records written in the same millisecond in the order they were written.
+    val sequence = keySequence.incrementAndGet()
     val randomSuffix = Crypto.secureRandom.nextBytes(4).toBase64Url()
-    return "${millis.toString().padStart(20, '0')}-$randomSuffix"
+    return "${millis.toString().padStart(20, '0')}-${sequence.toString().padStart(19, '0')}-$randomSuffix"
 }
+
+private val keySequence = AtomicLong()

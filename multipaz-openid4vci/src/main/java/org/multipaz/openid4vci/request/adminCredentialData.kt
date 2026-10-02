@@ -10,6 +10,7 @@ import kotlinx.serialization.json.put
 import org.multipaz.cbor.Cbor
 import org.multipaz.openid4vci.admin.AdminActionLogRecord
 import org.multipaz.openid4vci.util.IssuanceState
+import org.multipaz.openid4vci.util.deleteSystemOfRecordData
 import org.multipaz.rpc.backend.BackendEnvironment
 import org.multipaz.rpc.handler.InvalidRequestException
 import org.multipaz.rpc.handler.SimpleCipher
@@ -46,9 +47,7 @@ suspend fun adminRevealPortrait(call: ApplicationCall, actor: String) {
  */
 suspend fun adminDeleteRetainedData(call: ApplicationCall, actor: String) {
     val sessionId = requireSessionId(call)
-    val state = IssuanceState.getIssuanceState(sessionId)
-    state.systemOfRecordData = null
-    IssuanceState.updateIssuanceState(sessionId, state, expiration = null)
+    deleteSystemOfRecordData(sessionId)
     AdminActionLogRecord.record(actor, "retained_data_deleted", "session_id=$sessionId")
     call.respondText(
         text = buildJsonObject { put("success", true) }.toString(),

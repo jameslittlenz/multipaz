@@ -5,10 +5,12 @@ import io.ktor.client.request.get
 import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.readRawBytes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.ktor.util.encodeBase64
 import kotlinx.coroutines.Dispatchers
@@ -44,12 +46,18 @@ import org.multipaz.documenttype.knowntypes.AgeVerification
 import org.multipaz.documenttype.knowntypes.DrivingLicense
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
+import org.multipaz.idv.backend.face.FaceMatchException
+import org.multipaz.idv.backend.face.FaceMatcher
 import org.multipaz.idv.backend.face.FakeFaceMatcher
+import org.multipaz.idv.backend.face.UnavailableFaceMatcher
 import org.multipaz.idv.backend.persona.PersonaStore
+import org.multipaz.idv.backend.settings.IdvSettingsRecord
 import org.multipaz.idv.lds.Lds
 import org.multipaz.idv.mrz.Mrz
 import org.multipaz.idv.mrz.MrzSex
 import org.multipaz.idv.synthetic.SyntheticPassportFactory
+import org.multipaz.idv.synthetic.SyntheticPassportFactory.SyntheticPassport
+import org.multipaz.idv.synthetic.SyntheticPassportProfile
 import org.multipaz.mdoc.credential.MdocCredential
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
 import org.multipaz.openid4vci.credential.ValidatopiaCredentials
@@ -57,6 +65,10 @@ import org.multipaz.openid4vci.idv.IdentityProofing
 import org.multipaz.openid4vci.idv.PassportEvidence
 import org.multipaz.openid4vci.idv.toCbor
 import org.multipaz.openid4vci.server.configureRouting
+import org.multipaz.openid4vci.util.IssuanceState
+import org.multipaz.openid4vci.util.createIdvOffers
+import org.multipaz.openid4vci.util.deleteSystemOfRecordData
+import org.multipaz.openid4vci.util.purgeRetainedSystemOfRecordData
 import org.multipaz.provisioning.CredentialFormat
 import org.multipaz.provisioning.CredentialKeyAttestation
 import org.multipaz.provisioning.CredentialMetadata
@@ -85,6 +97,7 @@ import org.multipaz.utopia.knowntypes.Loyalty
 import kotlin.reflect.KClass
 import kotlin.reflect.cast
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -126,11 +139,43 @@ class PhotoIdEndToEndTest {
 
     @Test
     fun passportEvidenceIssuesPhotoId() = testApplication {
+        val (passport, evidenceResponse, httpClient) = submitPassportEvidence(FakeFaceMatcher())
+        withContext(TestBackendEnvironment(httpClient)) {
+            Assert.assertEquals(HttpStatusCode.OK, evidenceResponse.status)
+            val response = jsonOf(evidenceResponse.readRawBytes())
+            val offer = response["offer"]!!.jsonPrimitive.content
+
+            val credential = redeemOffer(offer)
+            assertPhotoIdCredential(credential, passport.dg1, passport.dg2, passport.sod)
+            assertAdditionalCredentials(response, offer, givenName = "TEST", familyName = "TRAVELLER")
+        }
+    }
+
+    @Test
+    fun passportEvidenceIsRejectedWithoutFaceModels() = testApplication {
+        val (_, evidenceResponse, _) = submitPassportEvidence(UnavailableFaceMatcher("models not installed"))
+        Assert.assertEquals(HttpStatusCode.BadRequest, evidenceResponse.status)
+        val response = jsonOf(evidenceResponse.readRawBytes())
+        Assert.assertEquals("idv_rejected", response["error"]!!.jsonPrimitive.content)
+        Assert.assertEquals(
+            listOf(FaceMatchException.FACE_MATCHER_UNAVAILABLE),
+            response["flags"]!!.jsonArray.map { it.jsonPrimitive.content }
+        )
+    }
+
+    /**
+     * Starts a server whose identity proofing uses [faceMatcher], switches the passport path on,
+     * and submits a synthetic NZ passport through `/idv/start` and `/idv/evidence`. Returns the
+     * passport, the `/idv/evidence` response and the client that made the requests.
+     */
+    private suspend fun ApplicationTestBuilder.submitPassportEvidence(
+        faceMatcher: FaceMatcher,
+    ): Triple<SyntheticPassport, HttpResponse, HttpClient> {
         val serverEnvironment = ServerEnvironment.create(serverConfiguration()) {
             add(CredentialFactoryRegistry::class, credentialFactoryRegistry)
             add(
                 IdentityProofing::class,
-                PassportIdentityProofing(FakeFaceMatcher(), ValidatopiaTestCsca.getOrCreate(), PersonaStore.EMPTY)
+                PassportIdentityProofing(faceMatcher, ValidatopiaTestCsca.getOrCreate(), PersonaStore.EMPTY)
             )
         }
         application {
@@ -138,7 +183,10 @@ class PhotoIdEndToEndTest {
             configureRouting(serverEnvironment)
         }
         val httpClient = createClient { followRedirects = false }
-        val testCsca = withContext(serverEnvironment.await()) { ValidatopiaTestCsca.getOrCreate() }
+        val testCsca = withContext(serverEnvironment.await()) {
+            IdvSettingsRecord.update(IdvSettingsRecord(passportIssuanceEnabled = true))
+            ValidatopiaTestCsca.getOrCreate()
+        }
 
         val passport = SyntheticPassportFactory.createPassport(
             documentSignerCertificate = testCsca.documentSignerCertificate,
@@ -153,9 +201,11 @@ class PhotoIdEndToEndTest {
             sex = MrzSex.FEMALE,
             expiryDate = LocalDate(2035, 1, 1),
             portraitBytes = FAKE_JPEG_BYTES,
+            // Laid out like a real New Zealand passport.
+            profile = SyntheticPassportProfile.NZL,
         )
 
-        withContext(TestBackendEnvironment(httpClient)) {
+        val response = withContext(TestBackendEnvironment(httpClient)) {
             val clientId = "urn:uuid:418745b8-78a3-4810-88df-7898aff3ffb4"
             val attestationKey = Crypto.createEcPrivateKey(EcCurve.P256)
 
@@ -170,7 +220,7 @@ class PhotoIdEndToEndTest {
             )
             val attestationJwt = buildWalletAttestationJwt(clientId, attestationKey.publicKey)
             val popJwt = buildPopJwt(clientId, attestationKey)
-            val evidenceResponse = httpClient.post("$BASE_URL/idv/evidence") {
+            httpClient.post("$BASE_URL/idv/evidence") {
                 headers {
                     append("OAuth-Client-Attestation", attestationJwt)
                     append("OAuth-Client-Attestation-PoP", popJwt)
@@ -178,13 +228,44 @@ class PhotoIdEndToEndTest {
                 contentType(ContentType.Application.OctetStream)
                 setBody(evidence.toCbor())
             }
-            Assert.assertEquals(HttpStatusCode.OK, evidenceResponse.status)
-            val response = jsonOf(evidenceResponse.readRawBytes())
-            val offer = response["offer"]!!.jsonPrimitive.content
+        }
+        return Triple(passport, response, httpClient)
+    }
 
-            val credential = redeemOffer(offer)
-            assertPhotoIdCredential(credential, passport.dg1, passport.dg2, passport.sod)
-            assertAdditionalCredentials(response, offer, givenName = "TEST", familyName = "TRAVELLER")
+    @Test
+    fun passportPathIsNotFoundWhileDisabled() = testApplication {
+        val serverEnvironment = ServerEnvironment.create(serverConfiguration()) {
+            add(CredentialFactoryRegistry::class, credentialFactoryRegistry)
+            add(
+                IdentityProofing::class,
+                PassportIdentityProofing(FakeFaceMatcher(), ValidatopiaTestCsca.getOrCreate(), PersonaStore.EMPTY)
+            )
+        }
+        application {
+            installServerEnvironment(serverEnvironment)
+            configureRouting(serverEnvironment)
+        }
+        val httpClient = createClient { followRedirects = false }
+
+        withContext(TestBackendEnvironment(httpClient)) {
+            val clientId = "urn:uuid:418745b8-78a3-4810-88df-7898aff3ffb4"
+            val attestationKey = Crypto.createEcPrivateKey(EcCurve.P256)
+            val attestationJwt = buildWalletAttestationJwt(clientId, attestationKey.publicKey)
+            val popJwt = buildPopJwt(clientId, attestationKey)
+            val response = httpClient.post("$BASE_URL/idv/start") {
+                headers {
+                    append("Content-Type", "application/json")
+                    append("OAuth-Client-Attestation", attestationJwt)
+                    append("OAuth-Client-Attestation-PoP", popJwt)
+                }
+                setBody(buildJsonObject { put("client_id", clientId) }.toString())
+            }
+            Assert.assertEquals(HttpStatusCode.NotFound, response.status)
+            val evidenceResponse = httpClient.post("$BASE_URL/idv/evidence") {
+                contentType(ContentType.Application.OctetStream)
+                setBody(ByteArray(0))
+            }
+            Assert.assertEquals(HttpStatusCode.NotFound, evidenceResponse.status)
         }
     }
 
@@ -247,6 +328,40 @@ class PhotoIdEndToEndTest {
             Assert.assertEquals("Persona", core["given_name"]!!.dataElementValue.asTstr)
             Assert.assertEquals("Validatopia Test Issuance", core["issuing_authority"]!!.dataElementValue.asTstr)
             assertAdditionalCredentials(response, offer, givenName = "Persona", familyName = "One")
+        }
+    }
+
+    @Test
+    fun retainedDataIsDeletedAfterRetentionAndOnRevocation() = runTest {
+        val personaStore = PersonaStore.fromJson(
+            """
+                [{ "id": "p1", "given_name": "Persona", "family_name": "One", "birth_date": "1985-03-12",
+                   "sex": 2, "nationality": "XVA", "document_number": "VPT000001",
+                   "expiry_date": "2032-06-01", "portrait": "p1.jpg" }]
+            """.trimIndent()
+        ) { FAKE_JPEG_BYTES }
+        lateinit var identityProofing: PassportIdentityProofing
+        val serverEnvironment = ServerEnvironment.create(serverConfiguration()) {
+            identityProofing = PassportIdentityProofing(FakeFaceMatcher(), ValidatopiaTestCsca.getOrCreate(), personaStore)
+            add(CredentialFactoryRegistry::class, credentialFactoryRegistry)
+            add(IdentityProofing::class, identityProofing)
+        }
+        withContext(serverEnvironment.await()) {
+            suspend fun retained() = IssuanceState.listIssuanceStates().filter { it.second.systemOfRecordData != null }
+            createIdvOffers(identityProofing.proofPersona("p1"), offerTtlSeconds = 300)
+            createIdvOffers(identityProofing.proofPersona("p1"), offerTtlSeconds = 300)
+            val sessions = retained().map { it.first }
+            Assert.assertEquals(2 * ValidatopiaCredentials.createFactories().size, sessions.size)
+
+            // Revoking a credential deletes its session's data.
+            Assert.assertTrue(deleteSystemOfRecordData(sessions[0]))
+            Assert.assertFalse(deleteSystemOfRecordData(sessions[0]))
+            Assert.assertEquals(sessions.size - 1, retained().size)
+
+            // Nothing is older than the retention period yet; a month on, everything is.
+            Assert.assertEquals(0, purgeRetainedSystemOfRecordData(30.days))
+            Assert.assertEquals(sessions.size - 1, purgeRetainedSystemOfRecordData(30.days, Clock.System.now() + 31.days))
+            Assert.assertTrue(retained().isEmpty())
         }
     }
 

@@ -20,11 +20,21 @@ data class IdvSettingsRecord(
     val photoIdValidityDays: Long = 730,
     val dataRetentionDays: Long = 30,
     val dummyIssuanceEnabled: Boolean = true,
+    /**
+     * Whether `/idv/start` and `/idv/evidence` accept real passports. `null` (the value in rows
+     * saved before this setting existed) means off: the passport path stays closed until an admin
+     * opens it, since a weak face matcher would let anyone with a chip read impersonate its holder.
+     */
+    val passportIssuanceEnabled: Boolean? = null,
 ) {
     companion object {
         // idv_require_active_auth stays off by default: multipaz-idv's Active Auth verifier
         // hasn't been built yet (deferred in M1).
-        const val DEFAULT_FACE_MATCH_THRESHOLD = 0.6
+
+        // SFace cosine similarity. OpenCV suggests 0.363, but the two placeholder persona
+        // portraits, different people, score 0.363 against each other. Until the threshold is
+        // calibrated on real passport-and-selfie pairs, err towards false rejects.
+        const val DEFAULT_FACE_MATCH_THRESHOLD = 0.5
 
         private val tableSpec = StorageTableSpec(
             name = "IdvSettings",
@@ -59,6 +69,7 @@ fun IdvSettingsRecord.toData(): IdvSettingsData = IdvSettingsData(
     photoIdValidityDays = photoIdValidityDays,
     dataRetentionDays = dataRetentionDays,
     dummyIssuanceEnabled = dummyIssuanceEnabled,
+    passportIssuanceEnabled = passportIssuanceEnabled == true,
 )
 
 fun IdvSettingsData.toRecord(): IdvSettingsRecord = IdvSettingsRecord(
@@ -69,4 +80,5 @@ fun IdvSettingsData.toRecord(): IdvSettingsRecord = IdvSettingsRecord(
     photoIdValidityDays = photoIdValidityDays,
     dataRetentionDays = dataRetentionDays,
     dummyIssuanceEnabled = dummyIssuanceEnabled,
+    passportIssuanceEnabled = passportIssuanceEnabled,
 )

@@ -41,6 +41,8 @@ suspend fun adminUpdateIdvSettings(call: ApplicationCall) {
         photoIdValidityDays = json.primitive("photo_id_validity_days")?.long ?: current.photoIdValidityDays,
         dataRetentionDays = json.primitive("data_retention_days")?.long ?: current.dataRetentionDays,
         dummyIssuanceEnabled = json.primitive("dummy_issuance_enabled")?.boolean ?: current.dummyIssuanceEnabled,
+        passportIssuanceEnabled = json.primitive("passport_issuance_enabled")?.boolean
+            ?: current.passportIssuanceEnabled,
     )
     val saved = identityProofing.updateSettings(updated)
     call.respondText(
@@ -59,4 +61,5 @@ private fun IdvSettingsData.toJson() = buildJsonObject {
     put("photo_id_validity_days", photoIdValidityDays)
     put("data_retention_days", dataRetentionDays)
     put("dummy_issuance_enabled", dummyIssuanceEnabled)
+    put("passport_issuance_enabled", passportIssuanceEnabled)
 }

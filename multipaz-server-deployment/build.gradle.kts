@@ -29,6 +29,10 @@ tasks.register("collectDependencies") {
 
     val stagingDir = layout.buildDirectory.dir("docker-staging")
 
+    val downloadFaceModels = project(":multipaz-idv-backend").tasks.named("downloadFaceModels")
+    dependsOn(downloadFaceModels)
+    inputs.files(downloadFaceModels)
+
     outputs.dir(stagingDir)
 
     doLast {
@@ -60,6 +64,10 @@ tasks.register("collectDependencies") {
                 }
             }
         }
+
+        val faceModelsDir = stagingDir.get().dir("face-models").asFile
+        faceModelsDir.deleteRecursively()
+        downloadFaceModels.get().outputs.files.singleFile.copyRecursively(faceModelsDir)
 
         val libCount = libsDir.listFiles()?.size ?: 0
         println("Collected ${serverProjects.size} server JARs and ${libCount} shared dependency JARs")

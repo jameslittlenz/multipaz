@@ -20,3 +20,16 @@ suspend fun identityProofingOrNotFound(call: ApplicationCall): IdentityProofing?
     }
     return identityProofing
 }
+
+/**
+ * Like [identityProofingOrNotFound], but also responds 404 and returns `null` when the admin has
+ * passport issuance switched off (see `IdvSettingsData.passportIssuanceEnabled`).
+ */
+suspend fun passportProofingOrNotFound(call: ApplicationCall): IdentityProofing? {
+    val identityProofing = identityProofingOrNotFound(call) ?: return null
+    if (!identityProofing.passportIssuanceEnabled()) {
+        call.respondText(status = HttpStatusCode.NotFound, text = "")
+        return null
+    }
+    return identityProofing
+}

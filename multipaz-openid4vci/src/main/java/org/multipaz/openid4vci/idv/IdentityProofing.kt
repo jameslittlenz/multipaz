@@ -18,6 +18,9 @@ interface IdentityProofing {
     /** Whether dummy-persona issuance is currently enabled. */
     suspend fun dummyIssuanceEnabled(): Boolean
 
+    /** Whether identity proofing from a real passport (`/idv/start`, `/idv/evidence`) is enabled. */
+    suspend fun passportIssuanceEnabled(): Boolean
+
     /** The dummy personas available for issuance, or an empty list if disabled. */
     suspend fun listPersonas(): List<PersonaSummary>
 
@@ -96,6 +99,7 @@ data class IdvSettingsData(
     val photoIdValidityDays: Long,
     val dataRetentionDays: Long,
     val dummyIssuanceEnabled: Boolean,
+    val passportIssuanceEnabled: Boolean,
 )
 
 /** One row of the issuance audit log; never contains the selfie. */

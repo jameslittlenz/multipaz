@@ -64,9 +64,19 @@ koog = "0.8.0"
 junit-jupiter = "5.10.0"
 jetbrains-navigationevent = "1.0.1"
 jj2000 = "5.2"
+onnxruntime = "1.30.0"
+jmrtd = "0.8.8"
+scuba-sc-android = "0.0.27"
+mlkit-text-recognition = "16.0.1"
+mlkit-face-detection = "16.1.7"
 
 [libraries]
 jj2000 = { module = "edu.ucar:jj2000", version.ref = "jj2000" }
+onnxruntime = { module = "com.microsoft.onnxruntime:onnxruntime", version.ref = "onnxruntime" }
+jmrtd = { module = "org.jmrtd:jmrtd", version.ref = "jmrtd" }
+scuba-sc-android = { module = "net.sf.scuba:scuba-sc-android", version.ref = "scuba-sc-android" }
+mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-text-recognition" }
+mlkit-face-detection = { module = "com.google.mlkit:face-detection", version.ref = "mlkit-face-detection" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
 junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params", version.ref = "junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }

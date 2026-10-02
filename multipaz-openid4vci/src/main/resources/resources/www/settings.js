@@ -9,8 +9,10 @@
         {
             key: "face_match_threshold", type: "number", step: "0.01", min: "0", max: "1",
             label: "Face match threshold (0-1)",
-            hint: "Higher rejects more false accepts (impostors) but also more real matches " +
-                "(false rejects). Lower is more permissive."
+            hint: "Cosine similarity of the selfie and passport face embeddings (SFace). " +
+                "Higher rejects more impostors (false accepts) but also more real matches " +
+                "(false rejects). OpenCV suggests 0.363, but two different placeholder personas " +
+                "score 0.363 against each other; the default is 0.5 until it's calibrated."
         },
         {
             key: "require_active_auth", type: "checkbox", label: "Require Active Authentication",
@@ -40,6 +42,12 @@
         {
             key: "dummy_issuance_enabled", type: "checkbox", label: "Dummy (persona) issuance enabled",
             hint: "Turns the \"Use a test identity\" wallet option, and /idv/personas, on or off."
+        },
+        {
+            key: "passport_issuance_enabled", type: "checkbox", label: "Passport issuance enabled",
+            hint: "Turns /idv/start and /idv/evidence on or off. Leave off until a real face " +
+                "matcher is deployed and the threshold is calibrated: otherwise anyone holding " +
+                "a passport, or a copy of its chip data, can get a Photo ID in its holder's name."
         },
     ];
 

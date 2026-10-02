@@ -48,6 +48,10 @@ COPY multipaz-server-deployment/docker/init/records.json /app/init/records.json
 # admin's own upload.
 COPY multipaz-server-deployment/docker/init/personas/ /app/seed/personas/
 
+# YuNet and SFace face models for the Validatopia profile's OnnxFaceMatcher, fetched and checked
+# against their pinned SHA-256 hashes by :multipaz-idv-backend:downloadFaceModels.
+COPY multipaz-server-deployment/build/docker-staging/face-models/ /app/face-models/
+
 # Copy startup script
 COPY multipaz-server-deployment/docker/start-servers.sh /app/start-servers.sh
 RUN chmod +x /app/start-servers.sh

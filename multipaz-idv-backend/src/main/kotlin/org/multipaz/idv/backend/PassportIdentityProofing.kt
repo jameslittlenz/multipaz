@@ -18,6 +18,7 @@ import org.multipaz.idv.backend.audit.IssuanceMethod
 import org.multipaz.idv.backend.audit.toEntry
 import org.multipaz.idv.backend.csca.UploadedCscaStore
 import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
+import org.multipaz.idv.backend.face.FaceMatchException
 import org.multipaz.idv.backend.face.FaceMatcher
 import org.multipaz.idv.backend.image.Jp2Decoder
 import org.multipaz.idv.backend.image.Jp2DecoderException
@@ -45,6 +46,7 @@ import org.multipaz.openid4vci.idv.PassportEvidence
 import org.multipaz.openid4vci.idv.PersonaSummary
 import org.multipaz.openid4vci.idv.TrustedCscaInfo
 import org.multipaz.rpc.handler.InvalidRequestException
+import org.multipaz.util.Logger
 import org.multipaz.util.toBase64Url
 import kotlin.time.Clock
 
@@ -62,6 +64,10 @@ class PassportIdentityProofing(
 
     override suspend fun proof(evidence: PassportEvidence): IdvResult {
         val settings = IdvSettingsRecord.get()
+        if (settings.passportIssuanceEnabled != true) {
+            // The endpoints already return 404 in this case; this guards any other caller.
+            return reject(listOf("PASSPORT_ISSUANCE_DISABLED"), evidence.sessionId, nationality = null, documentNumber = null)
+        }
         val sod = evidence.sod.toByteArray()
         val dg1 = evidence.dg1.toByteArray()
         val dg2 = evidence.dg2.toByteArray()
@@ -73,6 +79,9 @@ class PassportIdentityProofing(
         )
         val flags = mutableListOf<String>()
         flags.addAll(paResult.flags.map { it.name })
+        if (paResult.details.isNotEmpty()) {
+            Logger.w(TAG, "Passive authentication: ${paResult.details.joinToString("; ")}")
+        }
 
         // Demo mode: accept an otherwise-fully-verified SOD whose only concern is that its CSCA
         // isn't in the trust store (the flag is still recorded).
@@ -110,7 +119,12 @@ class PassportIdentityProofing(
             }
         }
 
-        val faceScore = faceMatcher.score(evidence.selfie.toByteArray(), portraitJpeg)
+        val faceScore = try {
+            faceMatcher.score(evidence.selfie.toByteArray(), portraitJpeg)
+        } catch (e: FaceMatchException) {
+            flags.add(e.flag)
+            return reject(flags, evidence.sessionId, mrz)
+        }
         val faceOk = faceScore >= settings.faceMatchThreshold
         if (!faceOk) {
             flags.add("FACE_MATCH_BELOW_THRESHOLD")
@@ -153,6 +167,8 @@ class PassportIdentityProofing(
     }
 
     override suspend fun dummyIssuanceEnabled(): Boolean = IdvSettingsRecord.get().dummyIssuanceEnabled
+
+    override suspend fun passportIssuanceEnabled(): Boolean = IdvSettingsRecord.get().passportIssuanceEnabled == true
 
     override suspend fun listPersonas(): List<PersonaSummary> {
         if (!dummyIssuanceEnabled()) {
@@ -369,6 +385,7 @@ class PassportIdentityProofing(
     }
 
     companion object {
+        private const val TAG = "PassportIdentityProofing"
         private const val UNKNOWN_COUNTRY = "XX"
 
         private fun todayUtc(): LocalDate = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
