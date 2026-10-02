@@ -144,7 +144,8 @@ private fun ShareButton(onClick: () -> Unit) {
         ),
         border = BorderStroke(2.dp, colorScheme.onSurface),
         contentPadding = PaddingValues(vertical = 20.dp),
-        modifier = Modifier.fillMaxWidth(),
+        // White space above and below, setting it apart from the title and the card stack.
+        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,

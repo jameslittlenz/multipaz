@@ -70,6 +70,8 @@ private struct ShareButton: View {
             .contentShape(RoundedRectangle(cornerRadius: 24))
         }
         .buttonStyle(.plain)
+        // White space above and below, setting it apart from the title and the card stack.
+        .padding(.vertical, 16)
         .accessibilityHint("Share in person with a QR code, or online with a website")
     }
 }
