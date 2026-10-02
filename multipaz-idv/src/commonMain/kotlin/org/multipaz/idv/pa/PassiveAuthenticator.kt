@@ -8,6 +8,7 @@ import org.multipaz.crypto.X509Cert
 import org.multipaz.crypto.X509CertChain
 import org.multipaz.crypto.X509CertChainValidationException
 import org.multipaz.idv.cms.CmsException
+import org.multipaz.idv.cms.CmsUnsupportedAlgorithmException
 import org.multipaz.idv.cms.SignedData
 import org.multipaz.idv.lds.LdsSecurityObject
 import kotlin.time.Clock
@@ -51,6 +52,8 @@ data class PassiveAuthenticationResult(
     val flags: Set<PassiveAuthenticationFlag>,
     val dataGroupHashMatches: Map<Int, Boolean>,
     val documentSignerCertificate: X509Cert?,
+    /** Why each flag was raised, for logs; no personal data. */
+    val details: List<String> = emptyList(),
 )
 
 /**
@@ -82,23 +85,34 @@ object PassiveAuthenticator {
             SignedData.parse(sod)
         } catch (e: CmsException) {
             return PassiveAuthenticationResult(
+                details = listOf("SOD couldn't be parsed: ${e.message}"),
                 trusted = false,
-                flags = setOf(PassiveAuthenticationFlag.MALFORMED_SOD),
+                flags = setOf(
+                    if (e is CmsUnsupportedAlgorithmException) {
+                        PassiveAuthenticationFlag.ALGORITHM_UNSUPPORTED_ON_DEVICE
+                    } else {
+                        PassiveAuthenticationFlag.MALFORMED_SOD
+                    }
+                ),
                 dataGroupHashMatches = emptyMap(),
                 documentSignerCertificate = null,
             )
         }
 
+        val details = mutableListOf<String>()
         val digestAlgorithm = SignedData.hashAlgorithmFromOid(signedData.digestAlgorithmOid)
         if (digestAlgorithm == null) {
             flags.add(PassiveAuthenticationFlag.ALGORITHM_UNSUPPORTED_ON_DEVICE)
+            details.add("Unsupported SignerInfo digest algorithm ${signedData.digestAlgorithmOid}")
         } else if (!Crypto.digest(digestAlgorithm, signedData.eContent).contentEquals(signedData.messageDigest)) {
             flags.add(PassiveAuthenticationFlag.MALFORMED_SOD)
+            details.add("The LDS Security Object's digest doesn't match the signed messageDigest")
         }
 
         val documentSignerCertificate = signedData.certificates.firstOrNull()
         if (documentSignerCertificate == null) {
             flags.add(PassiveAuthenticationFlag.MALFORMED_SOD)
+            details.add("The SOD carries no Document Signer certificate")
         } else {
             if (at < documentSignerCertificate.validityNotBefore || at > documentSignerCertificate.validityNotAfter) {
                 flags.add(PassiveAuthenticationFlag.DOCUMENT_SIGNER_VALIDITY)
@@ -111,12 +125,14 @@ object PassiveAuthenticator {
                     signedData.verifySignature(documentSignerCertificate.publicKey)
                 } catch (e: SignatureVerificationException) {
                     flags.add(PassiveAuthenticationFlag.SIGNATURE_INVALID)
+                    details.add("SOD signature (${signedData.signatureAlgorithm}) didn't verify: ${e.message}")
                 }
             }
 
             val cscaCandidates = cscaStore.findBySubject(documentSignerCertificate.issuer)
             if (cscaCandidates.isEmpty()) {
                 flags.add(PassiveAuthenticationFlag.UNTRUSTED_CSCA)
+                details.add("No trusted CSCA named ${documentSignerCertificate.issuer.name}")
             } else {
                 val supportedCandidates = cscaCandidates.filter { isSupported(it, supportedCurves) }
                 if (supportedCandidates.isEmpty()) {
@@ -134,33 +150,42 @@ object PassiveAuthenticator {
                             break
                         } catch (e: X509CertChainValidationException) {
                             // Try the next candidate with the same subject, if any.
+                            details.add("Document Signer doesn't chain to a CSCA named ${csca.subject.name}: ${e.message}")
                         }
                     }
                     if (!chainValidated) {
                         flags.add(PassiveAuthenticationFlag.CHAIN_INVALID)
+                    } else {
+                        details.removeAll { it.startsWith("Document Signer doesn't chain") }
                     }
                 }
             }
         }
 
-        val ldsSecurityObject = if (digestAlgorithm != null) {
-            try {
-                LdsSecurityObject.parse(signedData.eContent)
-            } catch (e: CmsException) {
-                flags.add(PassiveAuthenticationFlag.MALFORMED_SOD)
-                null
-            }
-        } else {
+        val ldsSecurityObject = try {
+            LdsSecurityObject.parse(signedData.eContent)
+        } catch (e: CmsException) {
+            flags.add(PassiveAuthenticationFlag.MALFORMED_SOD)
+            details.add("LDS Security Object couldn't be parsed: ${e.message}")
             null
+        }
+        // Data groups are hashed with the LDS Security Object's own hash algorithm, which may
+        // differ from the SignerInfo's digest algorithm.
+        val dataGroupHashAlgorithm = ldsSecurityObject?.let { SignedData.hashAlgorithmFromOid(it.hashAlgorithmOid) }
+        if (ldsSecurityObject != null && dataGroupHashAlgorithm == null) {
+            flags.add(PassiveAuthenticationFlag.ALGORITHM_UNSUPPORTED_ON_DEVICE)
+            details.add("Unsupported data group hash algorithm ${ldsSecurityObject.hashAlgorithmOid}")
         }
 
         val dataGroupHashMatches = dataGroups.mapValues { (number, bytes) ->
             val expected = ldsSecurityObject?.hashFor(number)
-            expected != null && digestAlgorithm != null &&
-                    expected.contentEquals(Crypto.digest(digestAlgorithm, bytes))
+            expected != null && dataGroupHashAlgorithm != null &&
+                    expected.contentEquals(Crypto.digest(dataGroupHashAlgorithm, bytes))
         }
         if (dataGroupHashMatches.values.any { !it }) {
             flags.add(PassiveAuthenticationFlag.HASH_MISMATCH)
+            details.add("Data groups whose hash doesn't match the SOD: " +
+                dataGroupHashMatches.filterValues { !it }.keys.joinToString { "DG$it" })
         }
 
         return PassiveAuthenticationResult(
@@ -168,6 +193,7 @@ object PassiveAuthenticator {
             flags = flags,
             dataGroupHashMatches = dataGroupHashMatches,
             documentSignerCertificate = documentSignerCertificate,
+            details = details,
         )
     }
 

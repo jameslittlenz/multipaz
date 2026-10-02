@@ -45,8 +45,21 @@ data class LdsSecurityObject(
     companion object {
         private const val VERSION_V0 = 0L
 
-        /** Parses an `LDSSecurityObject` from its DER encoding (a `SignedData`'s `eContent`). */
-        fun parse(bytes: ByteArray): LdsSecurityObject {
+        /**
+         * Parses an `LDSSecurityObject` from its DER encoding (a `SignedData`'s `eContent`). An
+         * LDS 1.8 `ldsVersionInfo` after the hashes is ignored.
+         *
+         * @throws CmsException if [bytes] isn't a well-formed `LDSSecurityObject`.
+         */
+        fun parse(bytes: ByteArray): LdsSecurityObject = try {
+            parseSequence(bytes)
+        } catch (e: CmsException) {
+            throw e
+        } catch (e: RuntimeException) {
+            throw CmsException("Malformed LDSSecurityObject: ${e.message ?: e::class.simpleName}")
+        }
+
+        private fun parseSequence(bytes: ByteArray): LdsSecurityObject {
             val seq = ASN1.decode(bytes) as? ASN1Sequence
                 ?: throw CmsException("LDSSecurityObject is not a SEQUENCE")
             val hashAlgorithmOid = ((seq.elements[1] as ASN1Sequence).elements[0] as ASN1ObjectIdentifier).oid

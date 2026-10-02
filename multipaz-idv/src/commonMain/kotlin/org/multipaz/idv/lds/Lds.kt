@@ -11,6 +11,33 @@ import org.multipaz.asn1.ASN1TaggedObject
 class LdsException(message: String) : Exception(message)
 
 /**
+ * The first facial image in an EF.DG2 file, encoded per ISO/IEC 19794-5.
+ *
+ * @property image the image bytes, JPEG or JPEG 2000.
+ * @property templateCount the number of biometric templates in DG2.
+ * @property imageCount the number of facial images in the first template's record.
+ * @property featurePointCount the number of feature points before the image.
+ * @property imageDataType the record's image data type: [IMAGE_DATA_TYPE_JPEG] or
+ *   [IMAGE_DATA_TYPE_JPEG2000].
+ * @property width the image width the record states, or 0 if unstated.
+ * @property height the image height the record states, or 0 if unstated.
+ */
+class Dg2Face(
+    val image: ByteArray,
+    val templateCount: Int,
+    val imageCount: Int,
+    val featurePointCount: Int,
+    val imageDataType: Int,
+    val width: Int,
+    val height: Int,
+) {
+    companion object {
+        const val IMAGE_DATA_TYPE_JPEG = 0
+        const val IMAGE_DATA_TYPE_JPEG2000 = 1
+    }
+}
+
+/**
  * Parsing and building for the ICAO 9303 Logical Data Structure (LDS) data groups read from a
  * passport chip's DG1 (MRZ) and DG2 (facial image) elementary files.
  *
@@ -44,6 +71,7 @@ object Lds {
     private const val GENERAL_HEADER_SIZE = 14
     private const val FACIAL_RECORD_HEADER_SIZE = 20
     private const val IMAGE_INFO_SIZE = 12
+    private const val FEATURE_POINT_SIZE = 8
     private const val FACIAL_RECORD_PREFIX_SIZE =
         FACIAL_RECORD_HEADER_SIZE + IMAGE_INFO_SIZE
 
@@ -66,32 +94,46 @@ object Lds {
     }
 
     /**
-     * Extracts the portrait image bytes (JPEG or JPEG 2000, per the CBEFF format type) from an
-     * EF.DG2 file built by [buildDG2].
-     *
-     * This only supports the legacy ISO/IEC 19794-5 encoding (a single facial record, no feature
-     * points), which is what [buildDG2] produces. ISO/IEC 39794-5, the newer face-image standard
-     * some passports use instead, isn't supported yet — real NZ/AU chips need to be inspected
-     * (the deferred M1 discovery task) before adding it.
+     * Extracts the portrait image bytes (JPEG or JPEG 2000, per the record's image data type) from
+     * an EF.DG2 file. See [parseDG2Face].
      */
-    fun parseDG2(dg2: ByteArray): ByteArray {
+    fun parseDG2(dg2: ByteArray): ByteArray = parseDG2Face(dg2).image
+
+    /**
+     * Parses the first facial image of an EF.DG2 file.
+     *
+     * This supports the legacy ISO/IEC 19794-5 encoding, taking the first facial image of the
+     * first biometric template and skipping any feature points before its image. ISO/IEC 39794-5,
+     * the newer face-image standard some passports use instead, isn't supported yet.
+     */
+    fun parseDG2Face(dg2: ByteArray): Dg2Face {
         val ef = decodeApplicationTag(dg2, TAG_EF_DG2, "EF.DG2")
         val group = decodeApplicationTag(ef.content, TAG_BIOMETRIC_INFO_GROUP, "biometric info group")
         val groupElements = ASN1.decodeMultiple(group.content)
         if (groupElements.size < 2 || groupElements[0] !is ASN1Integer) {
             throw LdsException("Biometric info group is missing its instance count")
         }
+        val instanceCount = (groupElements[0] as ASN1Integer).toLong().toInt()
         val info = requireApplicationTag(groupElements[1], TAG_BIOMETRIC_INFO, "biometric info")
         val infoElements = ASN1.decodeMultiple(info.content)
         val bdb = infoElements.filterIsInstance<ASN1TaggedObject>().firstOrNull {
             it.cls == ASN1TagClass.APPLICATION && it.tag == TAG_BIOMETRIC_DATA_BLOCK
         } ?: throw LdsException("Biometric info is missing its data block")
-        return parseIso19794Face(bdb.content)
+        if (bdb.enc == ASN1Encoding.CONSTRUCTED) {
+            // 0x7F2E rather than 0x5F2E: an ISO/IEC 39794-5 data block.
+            throw LdsException("ISO/IEC 39794-5 face data isn't supported")
+        }
+        return parseIso19794Face(bdb.content, instanceCount)
     }
 
-    /** Builds an EF.DG2 file wrapping [imageBytes] (JPEG or JPEG 2000) as a single facial record. */
-    fun buildDG2(imageBytes: ByteArray): ByteArray {
-        val bdbContent = buildIso19794Face(imageBytes)
+    /**
+     * Builds an EF.DG2 file wrapping [imageBytes] (JPEG or JPEG 2000) as a single facial record.
+     *
+     * @param featurePointCount the number of (zeroed) feature points to put before the image, as
+     *   some passports do.
+     */
+    fun buildDG2(imageBytes: ByteArray, featurePointCount: Int = 0): ByteArray {
+        val bdbContent = buildIso19794Face(imageBytes, featurePointCount)
         val bdb = ASN1TaggedObject(
             ASN1TagClass.APPLICATION, ASN1Encoding.PRIMITIVE, TAG_BIOMETRIC_DATA_BLOCK, bdbContent
         )
@@ -121,18 +163,46 @@ object Lds {
         return ASN1.encode(ef)
     }
 
-    private fun parseIso19794Face(record: ByteArray): ByteArray {
+    private fun parseIso19794Face(record: ByteArray, templateCount: Int): Dg2Face {
         if (record.size < GENERAL_HEADER_SIZE + FACIAL_RECORD_PREFIX_SIZE) {
             throw LdsException("ISO 19794-5 record is too short")
         }
         if (!record.copyOfRange(0, 4).contentEquals(FORMAT_ID)) {
             throw LdsException("ISO 19794-5 record has the wrong format identifier")
         }
-        return record.copyOfRange(GENERAL_HEADER_SIZE + FACIAL_RECORD_PREFIX_SIZE, record.size)
+        val imageCount = readTwoBytes(record, GENERAL_HEADER_SIZE - 2)
+        if (imageCount < 1) {
+            throw LdsException("ISO 19794-5 record has no facial images")
+        }
+        // The first facial record: its header, then the feature points, then the image
+        // information, then the image itself, which runs to the end of the facial record.
+        val facialRecordStart = GENERAL_HEADER_SIZE
+        val facialRecordLength = readFourBytes(record, facialRecordStart)
+        val featurePointCount = readTwoBytes(record, facialRecordStart + 4)
+        val imageInfoStart = facialRecordStart + FACIAL_RECORD_HEADER_SIZE + featurePointCount * FEATURE_POINT_SIZE
+        val imageStart = imageInfoStart + IMAGE_INFO_SIZE
+        val imageEnd = facialRecordStart.toLong() + facialRecordLength
+        if (imageEnd > record.size || imageStart > imageEnd) {
+            throw LdsException(
+                "ISO 19794-5 facial record length $facialRecordLength with $featurePointCount " +
+                    "feature points doesn't fit the ${record.size}-byte record"
+            )
+        }
+        return Dg2Face(
+            image = record.copyOfRange(imageStart, imageEnd.toInt()),
+            templateCount = templateCount,
+            imageCount = imageCount,
+            featurePointCount = featurePointCount,
+            imageDataType = record[imageInfoStart + 1].toInt() and 0xFF,
+            width = readTwoBytes(record, imageInfoStart + 2),
+            height = readTwoBytes(record, imageInfoStart + 4),
+        )
     }
 
-    private fun buildIso19794Face(imageBytes: ByteArray): ByteArray {
-        val recordLength = GENERAL_HEADER_SIZE + FACIAL_RECORD_PREFIX_SIZE + imageBytes.size
+    private fun buildIso19794Face(imageBytes: ByteArray, featurePointCount: Int): ByteArray {
+        val featurePoints = ByteArray(featurePointCount * FEATURE_POINT_SIZE)
+        val facialRecordLength = FACIAL_RECORD_PREFIX_SIZE + featurePoints.size + imageBytes.size
+        val recordLength = GENERAL_HEADER_SIZE + facialRecordLength
         val generalHeader = concat(
             FORMAT_ID,
             VERSION_ID,
@@ -140,8 +210,8 @@ object Lds {
             twoByteBigEndian(1), // number of facial images
         )
         val facialRecordHeader = concat(
-            fourByteBigEndian(FACIAL_RECORD_PREFIX_SIZE + imageBytes.size),
-            twoByteBigEndian(0), // number of feature points
+            fourByteBigEndian(facialRecordLength),
+            twoByteBigEndian(featurePointCount),
             byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), // gender..pose angle uncertainty
         )
         val imageInfo = concat(
@@ -152,8 +222,14 @@ object Lds {
             twoByteBigEndian(0), // device type (unknown)
             twoByteBigEndian(0), // quality (unspecified)
         )
-        return concat(generalHeader, facialRecordHeader, imageInfo, imageBytes)
+        return concat(generalHeader, facialRecordHeader, featurePoints, imageInfo, imageBytes)
     }
+
+    private fun readTwoBytes(bytes: ByteArray, offset: Int): Int =
+        ((bytes[offset].toInt() and 0xFF) shl 8) or (bytes[offset + 1].toInt() and 0xFF)
+
+    private fun readFourBytes(bytes: ByteArray, offset: Int): Long =
+        (readTwoBytes(bytes, offset).toLong() shl 16) or readTwoBytes(bytes, offset + 2).toLong()
 
     private fun decodeApplicationTag(bytes: ByteArray, tag: Int, name: String): ASN1TaggedObject {
         val obj = ASN1.decode(bytes) ?: throw LdsException("Failed to decode $name")

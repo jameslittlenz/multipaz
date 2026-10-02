@@ -16,6 +16,7 @@ import org.multipaz.idv.lds.LdsSecurityObject
 import org.multipaz.idv.mrz.MrzSex
 import org.multipaz.idv.setUpBouncyCastleIfNeeded
 import org.multipaz.idv.synthetic.SyntheticPassportFactory
+import org.multipaz.idv.synthetic.SyntheticPassportProfile
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -56,7 +57,10 @@ class PassiveAuthenticatorTest {
         return Chain(csca, ds, dsKey, keyAlgorithm)
     }
 
-    private suspend fun buildPassport(chain: Chain) = SyntheticPassportFactory.createPassport(
+    private suspend fun buildPassport(
+        chain: Chain,
+        profile: SyntheticPassportProfile = SyntheticPassportProfile.DEFAULT,
+    ) = SyntheticPassportFactory.createPassport(
         documentSignerCertificate = chain.documentSignerCertificate,
         documentSignerPrivateKey = chain.documentSignerPrivateKey,
         documentSignerSignatureAlgorithm = chain.documentSignerAlgorithm,
@@ -68,6 +72,7 @@ class PassiveAuthenticatorTest {
         birthDate = LocalDate(1990, 1, 1),
         sex = MrzSex.UNSPECIFIED,
         expiryDate = LocalDate(2030, 1, 1),
+        profile = profile,
     )
 
     private fun assertOnlyFlag(result: PassiveAuthenticationResult, flag: PassiveAuthenticationFlag) {
@@ -88,6 +93,21 @@ class PassiveAuthenticatorTest {
         assertTrue(result.flags.isEmpty())
         assertEquals(mapOf(1 to true, 2 to true), result.dataGroupHashMatches)
         assertEquals(chain.documentSignerCertificate, result.documentSignerCertificate)
+    }
+
+    @Test
+    fun newZealandLayoutIsTrusted() = runTest {
+        // Indefinite-length SOD, DG2 feature points and DG12-DG15 hashed alongside DG1 and DG2.
+        val chain = buildChain(Algorithm.ES256, curve = EcCurve.P256)
+        val passport = buildPassport(chain, SyntheticPassportProfile.NZL)
+        assertEquals(0x80.toByte(), passport.sod[5])
+        val result = PassiveAuthenticator.authenticate(
+            sod = passport.sod,
+            dataGroups = mapOf(1 to passport.dg1, 2 to passport.dg2),
+            cscaStore = CscaStore.from(listOf(chain.cscaCertificate)),
+        )
+        assertTrue(result.trusted, result.details.joinToString())
+        assertEquals(2, Lds.parseDG2Face(passport.dg2).featurePointCount)
     }
 
     @Test

@@ -28,7 +28,10 @@ import org.multipaz.crypto.checkSignature
 import org.multipaz.crypto.sign
 
 /** Thrown when CMS `SignedData` (used for a passport's `SOD`) is malformed. */
-class CmsException(message: String) : Exception(message)
+open class CmsException(message: String) : Exception(message)
+
+/** Thrown when a `SignedData` is well formed but uses an algorithm this code can't verify. */
+class CmsUnsupportedAlgorithmException(message: String) : CmsException(message)
 
 /**
  * The `id-icao-ldsSecurityObject` content type (ICAO 9303-10 Section 4.6.1), i.e. what a
@@ -76,8 +79,82 @@ data class SignedData(
         private const val OID_CONTENT_TYPE_ATTR = "1.2.840.113549.1.9.3"
         private const val OID_MESSAGE_DIGEST_ATTR = "1.2.840.113549.1.9.4"
 
-        /** Parses a `ContentInfo` wrapping a CMS `SignedData`, such as the contents of an `EF.SOD`. */
-        fun parse(bytes: ByteArray): SignedData {
+        // EF.SOD wraps its ContentInfo in an application-class tag 23 (identifier octet 0x77),
+        // per ICAO 9303-10 Section 4.6.2.
+        private const val TAG_EF_SOD = 23
+        private const val EF_SOD_IDENTIFIER = 0x77.toByte()
+
+        /**
+         * Parses a CMS `SignedData`: either the contents of an `EF.SOD`, as read from a chip, or the
+         * bare `ContentInfo` inside it.
+         *
+         * @throws CmsException if [bytes] isn't a well-formed `SignedData`.
+         */
+        fun parse(bytes: ByteArray): SignedData = try {
+            // Passports may use BER indefinite lengths around the ContentInfo, which the ASN.1
+            // decoder doesn't read.
+            parseContentInfo(BerLengths.toDefinite(unwrapEfSod(bytes)))
+        } catch (e: CmsException) {
+            throw e
+        } catch (e: RuntimeException) {
+            // Unexpected ASN.1 structure: wrong types (ClassCastException), missing elements
+            // (IndexOutOfBoundsException) or bad encodings (IllegalArgumentException).
+            throw CmsException("Malformed SignedData: ${e.message ?: e::class.simpleName}")
+        }
+
+        /** Splits concatenated DER elements into each element's bytes, exactly as encoded. */
+        private fun splitDerElements(bytes: ByteArray): List<ByteArray> {
+            val elements = mutableListOf<ByteArray>()
+            var offset = 0
+            while (offset < bytes.size) {
+                var position = offset + 1
+                if (bytes[offset].toInt() and 0x1F == 0x1F) {
+                    // High tag number: continuation octets have their top bit set.
+                    while (bytes[position].toInt() and 0x80 != 0) position++
+                    position++
+                }
+                val first = bytes[position++].toInt() and 0xFF
+                val length = if (first and 0x80 == 0) {
+                    first
+                } else {
+                    val octets = first and 0x7F
+                    if (octets == 0 || octets > 4) throw CmsException("Unsupported DER length encoding")
+                    var value = 0L
+                    repeat(octets) { value = (value shl 8) or (bytes[position++].toLong() and 0xFF) }
+                    if (value > Int.MAX_VALUE) throw CmsException("DER length too large")
+                    value.toInt()
+                }
+                val end = position + length
+                if (end > bytes.size) throw CmsException("DER element runs past the end of its container")
+                elements.add(bytes.copyOfRange(offset, end))
+                offset = end
+            }
+            return elements
+        }
+
+        private fun derLength(length: Int): ByteArray = when {
+            length < 0x80 -> byteArrayOf(length.toByte())
+            length < 0x100 -> byteArrayOf(0x81.toByte(), length.toByte())
+            length < 0x10000 -> byteArrayOf(0x82.toByte(), (length shr 8).toByte(), length.toByte())
+            else -> byteArrayOf(0x83.toByte(), (length shr 16).toByte(), (length shr 8).toByte(), length.toByte())
+        }
+
+        /** Wraps a `ContentInfo` in the `EF.SOD` tag, as a chip stores it. */
+        fun wrapEfSod(contentInfo: ByteArray): ByteArray = ASN1.encode(
+            ASN1TaggedObject(ASN1TagClass.APPLICATION, ASN1Encoding.CONSTRUCTED, TAG_EF_SOD, contentInfo)
+        )
+
+        /** Returns the contents of the `EF.SOD` tag, or [bytes] unchanged if they don't start with it. */
+        private fun unwrapEfSod(bytes: ByteArray): ByteArray {
+            if (bytes.isEmpty() || bytes[0] != EF_SOD_IDENTIFIER) {
+                return bytes
+            }
+            // Its contents may use indefinite lengths, so they're located from the header alone
+            // rather than by decoding them.
+            return BerLengths.contents(bytes)
+        }
+
+        private fun parseContentInfo(bytes: ByteArray): SignedData {
             val contentInfo = ASN1.decode(bytes) as? ASN1Sequence
                 ?: throw CmsException("ContentInfo is not a SEQUENCE")
             val contentTypeOid = (contentInfo.elements[0] as ASN1ObjectIdentifier).oid
@@ -100,8 +177,9 @@ data class SignedData(
                 signedData.elements[index] is ASN1TaggedObject &&
                 (signedData.elements[index] as ASN1TaggedObject).tag == 0) {
                 val certsTagged = signedData.elements[index++] as ASN1TaggedObject
-                val certSeqs = ASN1.decodeMultiple(certsTagged.content)
-                certificates = certSeqs.map { X509Cert(ByteString(ASN1.encode(it))) }
+                // Keep each certificate's bytes exactly as stored: re-encoding them could change
+                // bytes their issuer's signature covers.
+                certificates = splitDerElements(certsTagged.content).map { X509Cert(ByteString(it)) }
             }
             // A [1]-tagged crls field would be next; ICAO SODs never include one, so it's not handled.
 
@@ -132,14 +210,15 @@ data class SignedData(
             }
 
             val signatureAlgorithmSeq = signerInfo.elements[sIndex++] as ASN1Sequence
-            val signatureAlgorithm = resolveSignatureAlgorithm(signatureAlgorithmSeq)
+            val signatureAlgorithm = resolveSignatureAlgorithm(signatureAlgorithmSeq, digestAlgorithmOid)
             val signature = (signerInfo.elements[sIndex] as ASN1OctetString).value
 
             // The signature covers the signed attributes re-tagged as an ordinary SET OF (0x31),
             // not however they happen to be tagged ([0] IMPLICIT) inside the SignerInfo (RFC 5652
-            // Section 5.4).
+            // Section 5.4). Only the tag changes: the content is used exactly as stored, since
+            // re-encoding it (re-sorting the SET, say) would change the bytes that were signed.
             val signedAttributesForVerification =
-                ASN1.encode(ASN1Set(signedAttrs))
+                byteArrayOf(SET_TAG) + derLength(signedAttrsTagged.content.size) + signedAttrsTagged.content
 
             return SignedData(
                 eContentType = eContentType,
@@ -227,10 +306,24 @@ data class SignedData(
             return ASN1.encode(contentInfo)
         }
 
-        private fun resolveSignatureAlgorithm(seq: ASN1Sequence): Algorithm {
+        private const val SET_TAG = 0x31.toByte()
+
+        private fun resolveSignatureAlgorithm(seq: ASN1Sequence, digestAlgorithmOid: String): Algorithm {
             val oid = (seq.elements[0] as ASN1ObjectIdentifier).oid
             if (oid == OID.SIGNATURE_RSASSA_PSS.oid) {
                 return resolvePssAlgorithm(seq.elements[1] as ASN1Sequence)
+            }
+            // Some SODs name only the key type, leaving the hash to the SignerInfo's digest algorithm.
+            if (oid == OID.RSA_ENCRYPTION.oid || oid == OID.EC_PUBLIC_KEY.oid) {
+                val rsa = oid == OID.RSA_ENCRYPTION.oid
+                return when (digestAlgorithmOid) {
+                    OID.SHA256.oid -> if (rsa) Algorithm.RS256 else Algorithm.ES256
+                    OID.SHA384.oid -> if (rsa) Algorithm.RS384 else Algorithm.ES384
+                    OID.SHA512.oid -> if (rsa) Algorithm.RS512 else Algorithm.ES512
+                    else -> throw CmsUnsupportedAlgorithmException(
+                        "Unsupported digest algorithm $digestAlgorithmOid for signature algorithm $oid"
+                    )
+                }
             }
             // Note this collapses ESP*/ESB* (fully-specified: curve pinned by the algorithm) back
             // to the plain ES* value: the signature AlgorithmIdentifier only ever encodes the hash,
@@ -243,7 +336,7 @@ data class SignedData(
                 OID.SIGNATURE_RS256.oid -> Algorithm.RS256
                 OID.SIGNATURE_RS384.oid -> Algorithm.RS384
                 OID.SIGNATURE_RS512.oid -> Algorithm.RS512
-                else -> throw CmsException("Unsupported SignerInfo signature algorithm OID $oid")
+                else -> throw CmsUnsupportedAlgorithmException("Unsupported SignerInfo signature algorithm OID $oid")
             }
         }
 
@@ -260,7 +353,7 @@ data class SignedData(
                 OID.SHA256.oid -> Algorithm.PS256
                 OID.SHA384.oid -> Algorithm.PS384
                 OID.SHA512.oid -> Algorithm.PS512
-                else -> throw CmsException("Unsupported RSASSA-PSS hash algorithm OID $hashOid")
+                else -> throw CmsUnsupportedAlgorithmException("Unsupported RSASSA-PSS hash algorithm OID $hashOid")
             }
         }
 

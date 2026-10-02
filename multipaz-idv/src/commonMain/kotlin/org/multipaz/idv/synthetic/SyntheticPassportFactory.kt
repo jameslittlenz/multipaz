@@ -1,7 +1,10 @@
 package org.multipaz.idv.synthetic
 
 import kotlinx.datetime.LocalDate
+import org.multipaz.asn1.ASN1
 import org.multipaz.asn1.ASN1Integer
+import org.multipaz.asn1.ASN1Sequence
+import org.multipaz.asn1.ASN1TaggedObject
 import org.multipaz.crypto.Algorithm
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.Crypto
@@ -21,6 +24,32 @@ import org.multipaz.idv.mrz.Mrz
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
+
+/**
+ * How a synthetic passport's chip data is laid out, to mirror a country's real passports. See
+ * `docs/validatopia/passport-profiles.md`.
+ *
+ * @property dg2FeaturePointCount the feature points before DG2's image.
+ * @property otherDataGroups data groups besides DG1 and DG2 whose hashes the SOD lists.
+ * @property indefiniteLengthSod whether the SOD's outer layers use BER indefinite lengths.
+ */
+data class SyntheticPassportProfile(
+    val dg2FeaturePointCount: Int = 0,
+    val otherDataGroups: List<Int> = emptyList(),
+    val indefiniteLengthSod: Boolean = false,
+) {
+    companion object {
+        /** The plainest layout: DG1 and DG2 only, DER throughout. */
+        val DEFAULT = SyntheticPassportProfile()
+
+        /** New Zealand, as read from a current passport in October 2026. */
+        val NZL = SyntheticPassportProfile(
+            dg2FeaturePointCount = 2,
+            otherDataGroups = listOf(12, 13, 14, 15),
+            indefiniteLengthSod = true,
+        )
+    }
+}
 
 /**
  * Builds synthetic test CSCA/Document Signer certificate chains and passports (DG1, DG2 and SOD),
@@ -91,14 +120,15 @@ object SyntheticPassportFactory {
             DataGroupHash(number, Crypto.digest(hashAlgorithm, bytes))
         }
         val eContent = LdsSecurityObject.build(hashAlgorithm, dataGroupHashes)
-        return SignedData.build(
+        // Wrapped in the EF.SOD tag, exactly as a chip stores it.
+        return SignedData.wrapEfSod(SignedData.build(
             eContentType = OID_LDS_SECURITY_OBJECT,
             eContent = eContent,
             digestAlgorithm = hashAlgorithm,
             signerCertificate = documentSignerCertificate,
             signingKey = documentSignerPrivateKey,
             signatureAlgorithm = documentSignerSignatureAlgorithm,
-        )
+        ))
     }
 
     /**
@@ -136,6 +166,7 @@ object SyntheticPassportFactory {
         expiryDate: LocalDate,
         portraitBytes: ByteArray = DEFAULT_PORTRAIT_BYTES,
         hashAlgorithm: Algorithm = Algorithm.SHA256,
+        profile: SyntheticPassportProfile = SyntheticPassportProfile.DEFAULT,
     ): SyntheticPassport {
         val mrz = Mrz.buildTd3(
             documentCode = "P",
@@ -149,16 +180,37 @@ object SyntheticPassportFactory {
             expiryDate = expiryDate,
         )
         val dg1 = Lds.buildDG1(mrz.raw)
-        val dg2 = Lds.buildDG2(portraitBytes)
+        val dg2 = Lds.buildDG2(portraitBytes, featurePointCount = profile.dg2FeaturePointCount)
+        // Other data groups are only hashed into the SOD, as on a real chip; nothing reads them.
+        val otherDataGroups = profile.otherDataGroups.associateWith { "synthetic DG$it".encodeToByteArray() }
         val sod = createSod(
             documentSignerCertificate = documentSignerCertificate,
             documentSignerPrivateKey = documentSignerPrivateKey,
             documentSignerSignatureAlgorithm = documentSignerSignatureAlgorithm,
-            dataGroups = mapOf(1 to dg1, 2 to dg2),
+            dataGroups = mapOf(1 to dg1, 2 to dg2) + otherDataGroups,
             hashAlgorithm = hashAlgorithm,
         )
-        return SyntheticPassport(mrz = mrz, dg1 = dg1, dg2 = dg2, sod = sod)
+        val encodedSod = if (profile.indefiniteLengthSod) withIndefiniteLengths(sod) else sod
+        return SyntheticPassport(mrz = mrz, dg1 = dg1, dg2 = dg2, sod = encodedSod)
     }
+
+    /**
+     * Re-encodes an `EF.SOD`'s `ContentInfo` and its `[0]` content with BER indefinite lengths, as
+     * New Zealand passports store them, keeping the `SignedData` inside unchanged.
+     */
+    private fun withIndefiniteLengths(efSod: ByteArray): ByteArray {
+        val contentInfo = (ASN1.decode(efSod) as ASN1TaggedObject).content
+        val decoded = ASN1.decode(contentInfo) as ASN1Sequence
+        val contentType = ASN1.encode(decoded.elements[0])
+        val signedData = (decoded.elements[1] as ASN1TaggedObject).content
+        return SignedData.wrapEfSod(
+            byteArrayOf(0x30, INDEFINITE_LENGTH) + contentType +
+                byteArrayOf(0xA0.toByte(), INDEFINITE_LENGTH) + signedData + END_OF_CONTENTS + END_OF_CONTENTS
+        )
+    }
+
+    private const val INDEFINITE_LENGTH = 0x80.toByte()
+    private val END_OF_CONTENTS = byteArrayOf(0, 0)
 
     // Not a real JPEG; DG2 content is only ever hashed, never decoded, until the wallet UI
     // (an M4 concern) needs to display a portrait.
