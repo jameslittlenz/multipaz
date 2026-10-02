@@ -1,6 +1,5 @@
 package org.multipaz.samples.validatopia.verifier.ui
 
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,12 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.multipaz.compose.decodeImage
 import org.multipaz.documenttype.knowntypes.PhotoID
 import org.multipaz.samples.validatopia.shared.branding.LocalValidatopiaStatusColors
 import org.multipaz.samples.validatopia.shared.crossborder.PassportCheckResult
@@ -181,7 +180,7 @@ private fun PhotoBlock(bytes: ByteArray?, caption: String, description: String, 
             )
         } else {
             Text(
-                text = if (bytes == null) "Not shared" else "This image format (probably JPEG 2000) can't be shown",
+                text = if (bytes == null) "Not shared" else "This image can't be shown",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -189,8 +188,10 @@ private fun PhotoBlock(bytes: ByteArray?, caption: String, description: String, 
     }
 }
 
+// Passport portraits (DG2) are often JPEG 2000, which decodeImage() handles and BitmapFactory
+// doesn't. On failure decodeImage() returns a 1x1 placeholder rather than null.
 private fun decode(bytes: ByteArray): ImageBitmap? =
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    decodeImage(bytes).takeIf { it.width > 1 || it.height > 1 }
 
 @Composable
 private fun Dg1Comparison(passportCheck: PassportCheckResult) {

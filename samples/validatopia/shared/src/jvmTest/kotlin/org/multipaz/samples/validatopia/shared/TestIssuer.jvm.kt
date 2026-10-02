@@ -3,10 +3,13 @@ package org.multipaz.samples.validatopia.shared
 import io.ktor.client.HttpClient
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.withContext
 import org.multipaz.idv.backend.PassportIdentityProofing
 import org.multipaz.idv.backend.csca.ValidatopiaTestCsca
 import org.multipaz.idv.backend.face.FakeFaceMatcher
 import org.multipaz.idv.backend.persona.PersonaStore
+import org.multipaz.idv.backend.settings.IdvSettingsRecord
 import org.multipaz.openid4vci.credential.CredentialFactoryRegistry
 import org.multipaz.openid4vci.credential.ValidatopiaCredentials
 import org.multipaz.openid4vci.idv.IdentityProofing
@@ -23,7 +26,24 @@ actual fun runWithTestIssuer(block: suspend (issuerUrl: String, httpClient: Http
     }
 }
 
-private fun ApplicationTestBuilder.startIssuer() {
+/**
+ * Runs [block] against an in-process issuer with passport issuance switched on, passing it the
+ * Validatopia Test CSCA so it can sign synthetic passports the issuer trusts.
+ */
+fun runWithPassportTestIssuer(
+    block: suspend (issuerUrl: String, httpClient: HttpClient, testCsca: ValidatopiaTestCsca) -> Unit,
+) {
+    testApplication {
+        val serverEnvironment = startIssuer()
+        val testCsca = withContext(serverEnvironment.await()) {
+            IdvSettingsRecord.update(IdvSettingsRecord(passportIssuanceEnabled = true))
+            ValidatopiaTestCsca.getOrCreate()
+        }
+        block(ISSUER_URL, createClient { followRedirects = false }, testCsca)
+    }
+}
+
+private fun ApplicationTestBuilder.startIssuer(): Deferred<ServerEnvironment> {
     val serverEnvironment = ServerEnvironment.create(
         ServerConfiguration(
             arrayOf(
@@ -49,6 +69,7 @@ private fun ApplicationTestBuilder.startIssuer() {
         installServerEnvironment(serverEnvironment)
         configureRouting(serverEnvironment)
     }
+    return serverEnvironment
 }
 
 private const val ISSUER_URL = "http://localhost"

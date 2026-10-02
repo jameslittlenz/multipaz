@@ -23,6 +23,7 @@ import org.multipaz.samples.validatopia.wallet.WalletModel
 private object Routes {
     const val HOME = "home"
     const val ADD = "add"
+    const val PASSPORT = "passport"
     const val SETTINGS = "settings"
     const val SHARE = "share"
     const val DETAILS = "details/"
@@ -69,7 +70,7 @@ fun WalletApp(model: WalletModel) {
     PromptDialogs(promptModel = model.promptModel)
     ProvisioningBottomSheet(
         provisioningModel = model.provisioningModel,
-        // Test-identity offers are pre-authorized, so there's never a browser redirect to wait for.
+        // Identity-proofing offers are pre-authorized, so there's never a browser redirect to wait for.
         waitForRedirectLinkInvocation = { null },
         clientPreferences = clientPreferences,
         backend = backend,
@@ -89,7 +90,12 @@ fun WalletApp(model: WalletModel) {
             onShare = { push(Routes.SHARE) },
             onOpenSettings = { push(Routes.SETTINGS) },
         )
-        route == Routes.ADD -> AddPhotoIdScreen(model = model, onBack = ::pop)
+        route == Routes.ADD -> AddPhotoIdScreen(
+            model = model,
+            onBack = ::pop,
+            onVerifyWithPassport = { push(Routes.PASSPORT) },
+        )
+        route == Routes.PASSPORT -> PassportScreen(model = model, onBack = ::pop)
         route == Routes.SETTINGS -> SettingsScreen(model = model, onBack = ::pop)
         route.startsWith(Routes.DETAILS) -> MyDetailsScreen(
             model = model,

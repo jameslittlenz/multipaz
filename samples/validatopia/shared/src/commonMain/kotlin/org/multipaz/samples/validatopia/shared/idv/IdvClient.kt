@@ -25,6 +25,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.multipaz.cbor.Cbor
+import org.multipaz.cbor.buildCborMap
 import org.multipaz.crypto.AsymmetricKey
 import org.multipaz.crypto.Crypto
 import org.multipaz.provisioning.openid4vci.OpenID4VCIBackend
@@ -46,7 +48,17 @@ data class Persona(
 open class IdvException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /** The issuer has dummy (persona) issuance switched off, or doesn't run identity proofing at all. */
-class IdvUnavailableException : IdvException("Test identities are not available from this issuer")
+class IdvUnavailableException(
+    message: String = "Test identities are not available from this issuer",
+) : IdvException(message)
+
+/**
+ * The issuer checked the passport and selfie and turned them down.
+ *
+ * @property flags the issuer's reasons, such as `FACE_MATCH_BELOW_THRESHOLD`; see [IdvFlags].
+ */
+class IdvRejectedException(val flags: List<String>) :
+    IdvException("The issuer turned down the passport check: ${flags.joinToString()}")
 
 /**
  * Client for the Validatopia issuer's identity-proofing endpoints (`docs/validatopia/PLAN.md`,
@@ -140,6 +152,87 @@ class IdvClient(
         }
     }
 
+    /**
+     * Starts identity proofing from a passport and returns the session id to submit evidence to.
+     *
+     * @throws IdvUnavailableException if the issuer has passport issuance switched off.
+     * @throws IdvException on any other error.
+     */
+    @Throws(IdvException::class, CancellationException::class)
+    suspend fun startPassportSession(): String {
+        val clientId = backend.getClientId()
+        val response = withClientAttestation { attestation, pop ->
+            httpClient.post("$issuerUrl/idv/start") {
+                contentType(ContentType.Application.Json)
+                headers {
+                    append(HEADER_ATTESTATION, attestation)
+                    append(HEADER_ATTESTATION_POP, pop)
+                }
+                setBody(buildJsonObject { put("client_id", clientId) }.toString())
+            }
+        }
+        val body = checkedBody(response, PASSPORT_UNAVAILABLE)
+        return try {
+            Json.parseToJsonElement(body).jsonObject.string("session_id")
+        } catch (e: IllegalArgumentException) {
+            throw IdvException("Malformed session response from the issuer", e)
+        }
+    }
+
+    /**
+     * Submits a passport chip read and a selfie for the session [sessionId] started, and returns
+     * the credential offers, Photo ID first, as [requestPersonaOffers] does.
+     *
+     * @param selfie a JPEG of the holder's face, upright.
+     * @throws IdvRejectedException if the issuer turned the evidence down.
+     * @throws IdvUnavailableException if the issuer has passport issuance switched off.
+     * @throws IdvException on any other error.
+     */
+    @Throws(IdvException::class, CancellationException::class)
+    suspend fun submitPassportEvidence(sessionId: String, chipRead: PassportChipRead, selfie: ByteArray): List<String> {
+        // The issuer's PassportEvidence, CBOR-encoded with its field names as keys.
+        val evidence = Cbor.encode(
+            buildCborMap {
+                put("sessionId", sessionId)
+                put("sod", chipRead.sod)
+                put("dg1", chipRead.dg1)
+                put("dg2", chipRead.dg2)
+                put("selfie", selfie)
+            }
+        )
+        val response = withClientAttestation { attestation, pop ->
+            httpClient.post("$issuerUrl/idv/evidence") {
+                contentType(ContentType.Application.OctetStream)
+                headers {
+                    append(HEADER_ATTESTATION, attestation)
+                    append(HEADER_ATTESTATION_POP, pop)
+                }
+                setBody(evidence)
+            }
+        }
+        if (response.status == HttpStatusCode.BadRequest) {
+            val flags = try {
+                val json = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+                if (json["error"]?.jsonPrimitive?.content == "idv_rejected") {
+                    json["flags"]?.jsonArray?.map { it.jsonPrimitive.content }
+                } else {
+                    null
+                }
+            } catch (e: SerializationException) {
+                null
+            } catch (e: IllegalArgumentException) {
+                null
+            }
+            flags?.let { throw IdvRejectedException(it) }
+        }
+        val body = checkedBody(response, PASSPORT_UNAVAILABLE)
+        return try {
+            Json.parseToJsonElement(body).jsonObject["offers"]!!.jsonArray.map { it.jsonPrimitive.content }
+        } catch (e: RuntimeException) {
+            throw IdvException("Malformed offer response from the issuer", e)
+        }
+    }
+
     private suspend fun withClientAttestation(
         block: suspend (attestation: String, pop: String) -> HttpResponse
     ): HttpResponse {
@@ -188,11 +281,12 @@ class IdvClient(
         }
     }
 
-    private suspend fun checkedBody(response: HttpResponse): String {
+    private suspend fun checkedBody(response: HttpResponse, unavailableMessage: String? = null): String {
         val body = response.bodyAsText()
         return when (response.status) {
             HttpStatusCode.OK -> body
-            HttpStatusCode.NotFound -> throw IdvUnavailableException()
+            HttpStatusCode.NotFound ->
+                throw unavailableMessage?.let { IdvUnavailableException(it) } ?: IdvUnavailableException()
             else -> throw IdvException("The issuer returned ${response.status.value}: ${body.take(MAX_ERROR_LENGTH)}")
         }
     }
@@ -201,6 +295,7 @@ class IdvClient(
         private const val HEADER_ATTESTATION = "OAuth-Client-Attestation"
         private const val HEADER_ATTESTATION_POP = "OAuth-Client-Attestation-PoP"
         private const val MAX_ERROR_LENGTH = 200
+        private const val PASSPORT_UNAVAILABLE = "This issuer isn't accepting passports at the moment"
 
         /** Reads a string field, mapping absence or a non-string to [IllegalArgumentException]. */
         private fun JsonObject.string(name: String): String = try {

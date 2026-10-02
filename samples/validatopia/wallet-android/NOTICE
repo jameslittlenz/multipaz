@@ -1,0 +1,26 @@
+Validatopia Wallet (Android) includes the following third-party libraries for reading
+passport chips. They are used unmodified, as separate libraries fetched from Maven Central
+at build time, and can be replaced with modified versions by changing the versions in
+gradle/libs.versions.toml and rebuilding.
+
+JMRTD 0.8.8 (org.jmrtd:jmrtd), https://jmrtd.org/
+  GNU Lesser General Public License (LGPL), https://www.gnu.org/licenses/lgpl.html
+  Source: https://repo1.maven.org/maven2/org/jmrtd/jmrtd/0.8.8/
+
+SCUBA (net.sf.scuba:scuba-smartcards 0.0.21, net.sf.scuba:scuba-sc-android 0.0.27),
+http://scuba.sourceforge.net/
+  GNU Lesser General Public License (LGPL), https://www.gnu.org/licenses/lgpl.html
+  Source: https://repo1.maven.org/maven2/net/sf/scuba/
+
+EJBCA CVC 1.4.13 (org.ejbca.cvc:cert-cvc), a JMRTD dependency
+  GNU Lesser General Public License, version 2.1,
+  https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+  Source: https://repo1.maven.org/maven2/org/ejbca/cvc/cert-cvc/1.4.13/
+
+It also includes:
+
+Bouncy Castle (org.bouncycastle:bcprov-jdk18on and related), under the Bouncy Castle
+licence: https://www.bouncycastle.org/licence.html
+
+Google ML Kit text recognition and face detection, under the ML Kit Terms of Service:
+https://developers.google.com/ml-kit/terms

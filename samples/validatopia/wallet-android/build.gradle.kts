@@ -62,6 +62,15 @@ kotlin {
                 implementation(project(":multipaz-dcapi"))
                 implementation(project(":multipaz-doctypes"))
                 implementation(project(":samples:validatopia:shared"))
+                // Reading passport chips. JMRTD and scuba are LGPL and used unmodified; see NOTICE.
+                implementation(libs.jmrtd)
+                implementation(libs.scuba.sc.android)
+                implementation(libs.bouncy.castle.bcprov)
+                // MRZ scanning and liveness, with the models bundled in the app. The camera frames
+                // multipaz-compose hands over are CameraX images.
+                implementation(libs.androidx.camera.camera2)
+                implementation(libs.mlkit.text.recognition)
+                implementation(libs.mlkit.face.detection)
             }
         }
     }
@@ -122,6 +131,8 @@ android {
     packaging {
         resources {
             excludes += listOf("/META-INF/{AL2.0,LGPL2.1}", "/META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+            // BouncyCastle's provider and utility jars both carry its licence.
+            pickFirsts += listOf("META-INF/LICENSE.md")
         }
     }
 }

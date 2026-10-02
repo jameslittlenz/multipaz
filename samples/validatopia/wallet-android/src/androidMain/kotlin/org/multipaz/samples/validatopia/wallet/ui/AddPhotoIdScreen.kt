@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -19,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -35,6 +37,7 @@ import org.multipaz.samples.validatopia.shared.idv.IdvUnavailableException
 import org.multipaz.samples.validatopia.shared.idv.Persona
 import org.multipaz.samples.validatopia.shared.ui.SectionHeading
 import org.multipaz.samples.validatopia.shared.ui.ValidatopiaScaffold
+import org.multipaz.samples.validatopia.wallet.BuildConfig
 import org.multipaz.samples.validatopia.wallet.WalletModel
 import org.multipaz.util.Logger
 
@@ -48,13 +51,25 @@ private sealed class PersonasState {
 }
 
 /**
- * Getting a Photo ID, and with it a Driver Licence, Gym Membership and Age Verification. Only the
- * test-identity path exists in this version; "Verify with passport"
- * (NFC chip read, liveness, face match) arrives in milestone M6 and isn't shown at all until then.
+ * Getting a Photo ID, and with it a Driver Licence, Gym Membership and Age Verification: from a
+ * passport ([onVerifyWithPassport]), or from a test identity. The passport option only appears
+ * while the issuer accepts passports.
  */
 @Composable
-fun AddPhotoIdScreen(model: WalletModel, onBack: () -> Unit) {
+fun AddPhotoIdScreen(model: WalletModel, onBack: () -> Unit, onVerifyWithPassport: () -> Unit) {
     val coroutineScope = rememberCoroutineScope()
+    // Whether the issuer accepts passports: null while asking. Asking starts a passport session,
+    // which the issuer lets expire unused.
+    val passportAvailable by produceState<Boolean?>(initialValue = null) {
+        value = try {
+            model.createIdvClient().startPassportSession()
+            true
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            if (e !is IdvUnavailableException) Logger.w(TAG, "Checking for passport issuance failed", e)
+            false
+        }
+    }
     var state by remember { mutableStateOf<PersonasState>(PersonasState.Loading) }
     var reloadCount by remember { mutableIntStateOf(0) }
     var requestingPersona by remember { mutableStateOf<Persona?>(null) }
@@ -91,6 +106,32 @@ fun AddPhotoIdScreen(model: WalletModel, onBack: () -> Unit) {
     }
 
     ValidatopiaScaffold(title = "Get a Photo ID", onBack = onBack) {
+        if (BuildConfig.DEBUG || passportAvailable == true) {
+            SectionHeading("Verify with your passport")
+            Text(
+                text = "Scan your passport, read its chip with your phone and take a selfie. Works with " +
+                    "passports that have the chip symbol on the cover.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            when (passportAvailable) {
+                null -> ProgressRow("Checking the issuer…")
+                true -> Button(onClick = onVerifyWithPassport, modifier = Modifier.fillMaxWidth()) {
+                    Text("Verify with passport")
+                }
+                false -> {
+                    // Debug builds only: the chip can still be read, to record a passport profile.
+                    Text(
+                        text = "This issuer isn't accepting passports at the moment. You can still read a " +
+                            "passport's chip to see its details.",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    OutlinedButton(onClick = onVerifyWithPassport, modifier = Modifier.fillMaxWidth()) {
+                        Text("Read a passport chip")
+                    }
+                }
+            }
+        }
+
         SectionHeading("Use a test identity")
         Text(
             text = "Choose a test identity. The Validatopia issuer creates a Photo ID with that person's " +
